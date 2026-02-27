@@ -65,7 +65,7 @@ The Insights Mafia Office Manager is a custom-built web application that provide
 
    ```env
    NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=your_supabase_key
    SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
    JWT_SECRET=your_random_jwt_secret
    ```
