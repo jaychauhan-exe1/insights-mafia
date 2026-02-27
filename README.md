@@ -1,36 +1,92 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Insights Mafia Office Manager
 
-## Getting Started
+A comprehensive office management solution tailored for **Insights Mafia**, designed to streamline internal operations, task management, and financial tracking for employees and freelancers.
 
-First, run the development server:
+## 🚀 Overview
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+The Insights Mafia Office Manager is a custom-built web application that provides a unified platform for managing clients, tasks, attendance, and payments. It features role-based access control to ensure that Admins, Employees, and Freelancers have access to the tools they need.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## ✨ Key Features
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 🛠️ For Administrators
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **User Management:** Create, update, and manage accounts for Admins, Employees, and Freelancers.
+- **Client Management:** Maintain a centralized database of clients and project details.
+- **Task Orchestration:** Assign tasks to team members, track progress, and review submissions.
+- **Financial Oversight:** Manage salaries for employees and wallet balances for freelancers. Track client payments and monthly charges.
+- **Attendance & Leave Monitoring:** Review employee attendance logs and approve/reject leave requests.
+- **Approval System:** Centralized hub for task reviews and payment approvals.
 
-## Learn More
+### 👥 For Employees
 
-To learn more about Next.js, take a look at the following resources:
+- **Attendance Tracking:** Easy check-in and check-out system to log daily presence.
+- **Task Dashboard:** View and manage assigned tasks with status updates.
+- **Leave Requests:** Submit and track the status of leave applications.
+- **Salary Insights:** View monthly salary and deduction details.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 💻 For Freelancers
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Task Management:** Work on assigned tasks, submit links for review, and receive feedback.
+- **Wallet System:** Real-time visibility into earned balances and transaction history.
+- **Direct Submissions:** Integrated system for submitting work and reference links.
 
-## Deploy on Vercel
+## 💻 Tech Stack
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Frontend:** Next.js (App Router), React 19
+- **Styling:** Tailwind CSS 4, Shadcn UI, Lucide Icons
+- **Backend/Database:** Supabase (PostgreSQL)
+- **Authentication:** Custom JWT-based session management with Bcrypt hashing
+- **Forms & Validation:** React Hook Form, Zod
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🛠️ Getting Started
+
+### Prerequisites
+
+- Node.js (Latest LTS recommended)
+- Supabase Project
+
+### Installation
+
+1. **Clone the repository:**
+
+   ```bash
+   git clone <repository-url>
+   cd office-manager
+   ```
+
+2. **Install dependencies:**
+
+   ```bash
+   npm install
+   ```
+
+3. **Set up Environment Variables:**
+   Create a `.env` file in the root directory and add your Supabase credentials:
+
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+   JWT_SECRET=your_random_jwt_secret
+   ```
+
+4. **Initialize Database:**
+   Run the SQL scripts provided in `schema.sql` and `supabase_updates.sql` in your Supabase SQL Editor to set up the required tables, triggers, and RLS policies.
+
+5. **Run the development server:**
+   ```bash
+   npm run dev
+   ```
+
+## 📂 Project Structure
+
+- `/app`: Next.js App Router pages and server actions.
+- `/components`: Reusable UI components (Shadcn UI + custom).
+- `/lib`: Utility functions, Supabase client configurations, and Auth logic.
+- `/types`: TypeScript definitions for database entities and application state.
+- `schema.sql`: Initial database schema definition.
+- `supabase_updates.sql`: Incremental updates and RLS policies.
+
+---
+
+Built with ❤️ for **Insights Mafia**.
