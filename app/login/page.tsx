@@ -37,11 +37,12 @@ export default function LoginPage() {
     return (
         <div className="flex flex-col min-h-screen items-center justify-center bg-[#F3F4F6] p-6">
             <div className="flex flex-col items-center mb-8">
-                <div className="relative w-12 h-12 shadow-sm rounded-xl overflow-hidden bg-white flex items-center justify-center p-2">
+                <div className="relative shadow-sm rounded-xl overflow-hidden bg-white flex items-center justify-center p-2">
                     <Image
                         src="/assets/logo.png"
+                        width={200}
+                        height={200}
                         alt="Logo"
-                        fill
                         className="object-contain p-2"
                         priority
                     />
