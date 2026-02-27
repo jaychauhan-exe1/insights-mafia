@@ -41,7 +41,7 @@ export default function LoginPage() {
                     <Image
                         src="/assets/logo.png"
                         width={200}
-                        height={200}
+                        height={50}
                         alt="Logo"
                         className="object-contain p-2"
                         priority
