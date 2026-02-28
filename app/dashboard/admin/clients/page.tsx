@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Briefcase, Eye, Trash2, IndianRupee, Link as LinkIcon } from 'lucide-react';
+import { Briefcase, Eye, Trash2, IndianRupee, Link as LinkIcon, Banknote } from 'lucide-react';
 import Link from 'next/link';
 import { deleteClient } from './actions';
 import { EditClientDialog } from './edit-client-dialog';
@@ -30,6 +30,12 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
         .order('name', { ascending: true })
         .range(start, end);
 
+    // Fetch all for total calculation (main query is paginated)
+    const { data: allClients } = await supabase
+        .from('clients')
+        .select('monthly_charges');
+
+    const totalMonthlyYield = allClients?.reduce((sum, c) => sum + (Number(c.monthly_charges) || 0), 0) || 0;
     const totalPages = Math.ceil((count || 0) / pageSize);
 
     return (
@@ -59,6 +65,31 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                     <CreateClientDialog />
                 </div>
             </header>
+
+            {/* Stats Overview */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card className="border border-border/50 shadow-sm rounded-xl bg-primary text-white p-6 relative overflow-hidden group">
+                    <Briefcase className="absolute -right-4 -bottom-4 w-24 h-24 text-white/10 rotate-12 group-hover:scale-110 transition-transform duration-500" />
+                    <div className="relative z-10">
+                        <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mb-1">Total Client Partners</p>
+                        <h3 className="text-3xl font-bold">{count || 0}</h3>
+                    </div>
+                </Card>
+                <Card className="border border-border/50 shadow-sm rounded-xl p-6 flex items-center justify-between group overflow-hidden relative">
+                    <div className="relative z-10">
+                        <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest mb-1">Total Monthly Yield</p>
+                        <div className="flex items-center gap-1.5 text-emerald-600">
+                            <IndianRupee className="w-6 h-6" />
+                            <h3 className="text-3xl font-bold tabular-nums">
+                                {totalMonthlyYield.toLocaleString('en-IN')}
+                            </h3>
+                        </div>
+                    </div>
+                    <div className="w-12 h-12 flex items-center justify-center text-emerald-100 group-hover:scale-110 transition-transform duration-500">
+                        <Banknote className="w-12 h-12" />
+                    </div>
+                </Card>
+            </div>
 
             <Card className="border border-border/50 shadow-sm rounded-xl overflow-hidden bg-white">
                 <div className="hidden md:block overflow-x-auto">

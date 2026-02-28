@@ -3,27 +3,17 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/supabase/get-profile";
 import { revalidatePath } from "next/cache";
-import { format } from "date-fns";
-
-const getISTTime = () => {
-  const now = new Date();
-  // India is UTC+5:30
-  const offset = 5.5 * 60 * 60 * 1000;
-  return new Date(now.getTime() + offset);
-};
+import { getISTISOString, getISTToday, getISTHours } from "@/lib/date-utils";
 
 const isWithinCheckInHours = () => {
-  const ist = getISTTime();
-  const hours = ist.getUTCHours();
+  const hours = getISTHours();
   // 10 AM to 6 PM (18:00)
   return hours >= 10 && hours < 18;
 };
 
 const isWithinCheckOutHours = () => {
-  const ist = getISTTime();
-  const hours = ist.getUTCHours();
-  // 10 AM to 12 AM (24:00 - butHours returns 0-23)
-  // So we only need to check if it's 10 AM or later for the same day
+  const hours = getISTHours();
+  // 10 AM to 12 AM (24:00)
   return hours >= 10;
 };
 
@@ -44,12 +34,12 @@ export async function checkIn(
   if (!profile) return { error: "Not authenticated" };
 
   const supabase = await createAdminClient();
-  const today = format(new Date(), "yyyy-MM-dd");
+  const today = getISTToday();
 
   const { error } = await supabase.from("attendance").insert({
     user_id: profile.id,
     date: today,
-    check_in: new Date().toISOString(),
+    check_in: getISTISOString(),
     status: "Present", // Initial status, will be refined on checkout
     check_in_location: location || null,
     check_in_workplace: workPlace,
@@ -83,7 +73,7 @@ export async function checkOut(
   if (!profile) return { error: "Not authenticated" };
 
   const supabase = await createAdminClient();
-  const today = format(new Date(), "yyyy-MM-dd");
+  const today = getISTToday();
 
   // Fetch check_in time to calculate status
   const { data: currentEntry } = await supabase
@@ -96,7 +86,7 @@ export async function checkOut(
   let status = "Present";
   if (currentEntry?.check_in) {
     const checkInTime = new Date(currentEntry.check_in).getTime();
-    const checkOutTime = new Date().getTime();
+    const checkOutTime = new Date().getTime(); // Standard getTime is fine for duration calculation
     const durationHours = (checkOutTime - checkInTime) / (1000 * 60 * 60);
 
     if (durationHours < 4) {
@@ -107,7 +97,7 @@ export async function checkOut(
   const { error } = await supabase
     .from("attendance")
     .update({
-      check_out: new Date().toISOString(),
+      check_out: getISTISOString(),
       check_out_location: location || null,
       check_out_workplace: workPlace,
       status: status,

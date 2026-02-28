@@ -50,6 +50,8 @@ interface AttendanceRecord {
     };
 }
 
+import { formatISTTime, getISTToday } from '@/lib/date-utils';
+
 export function AttendanceCalendar({ records, joiningDate }: { records: AttendanceRecord[], joiningDate?: string }) {
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -64,16 +66,8 @@ export function AttendanceCalendar({ records, joiningDate }: { records: Attendan
         end: calendarEnd
     });
 
-    const getISTTime = () => {
-        const now = new Date();
-        const offset = 5.5 * 60 * 60 * 1000;
-        return new Date(now.getTime() + offset);
-    };
-
     const isAfterCheckoutWindow = (recordDate: string) => {
-        const ist = getISTTime();
-        const todayStr = format(ist, 'yyyy-MM-dd');
-
+        const todayStr = getISTToday();
         return recordDate < todayStr;
     };
 
@@ -123,8 +117,8 @@ export function AttendanceCalendar({ records, joiningDate }: { records: Attendan
                             const dayRecords = getStatusForDay(day);
                             const isCurrentMonth = isSameMonth(day, monthStart);
                             const isDayToday = isToday(day);
-                            const istToday = getISTTime();
-                            const isPastDay = day < istToday && !isSameDay(day, istToday);
+                            const istTodayValue = new Date(); // Browser is in IST
+                            const isPastDay = day < istTodayValue && !isSameDay(day, istTodayValue);
                             const isWeekday = day.getDay() !== 0 && day.getDay() !== 6;
 
                             let mainStatus = dayRecords.length > 0 ? (
@@ -234,9 +228,9 @@ export function AttendanceCalendar({ records, joiningDate }: { records: Attendan
                                                 <TableCell>
                                                     <div className="flex items-center gap-2 text-[10px] font-bold tabular-nums">
                                                         <Clock className="w-3 h-3 text-muted-foreground" />
-                                                        {record.check_in ? format(new Date(record.check_in), 'HH:mm') : '-'}
+                                                        {formatISTTime(record.check_in)}
                                                         <span className="text-muted-foreground/20">/</span>
-                                                        {record.check_out ? format(new Date(record.check_out), 'HH:mm') : '...'}
+                                                        {formatISTTime(record.check_out)}
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="text-right px-6">
