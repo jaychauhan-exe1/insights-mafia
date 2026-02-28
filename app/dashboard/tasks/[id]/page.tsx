@@ -96,7 +96,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
                         {task.deadline && (
                             <div className="flex items-center gap-2 text-red-500 font-bold text-[10px] uppercase tracking-widest bg-red-50 px-2.5 py-1 rounded-md border border-red-100">
                                 <Clock className="w-3 h-3" />
-                                Exp: {format(new Date(task.deadline), 'MMM dd, HH:mm')}
+                                Deadline: {format(new Date(task.deadline), 'MMM dd, HH:mm')}
                             </div>
                         )}
                         {profile.role !== 'Employee' && task.payment_amount && (

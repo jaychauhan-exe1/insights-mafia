@@ -1,7 +1,7 @@
 import { getProfile } from '@/lib/supabase/get-profile';
 import { createAdminClient } from '@/lib/supabase/server';
 import { Card, CardContent } from '@/components/ui/card';
-import { Users, ClipboardList, Clock, Wallet, ChevronRight, Play, Calendar as CalendarIcon, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Users, ClipboardList, Clock, Wallet, ChevronRight, Play, Calendar as CalendarIcon, CheckCircle2, AlertCircle, Banknote } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, startOfWeek, endOfWeek, isSameMonth } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -23,10 +23,11 @@ export default async function DashboardPage() {
         recentTasksRes,
         adminActivityRes,
         clientsRes,
-        allEmployeesRes,
+        allProfilesRes,
         allAttendanceRes,
-        leaveRequestsRes,
-        firstAttendancesRes
+        allLeaveRequestsRes,
+        firstAttendancesRes,
+        approvalItemsRes
     ] = await Promise.all([
         supabase.from('tasks').select('*', { count: 'exact', head: true })
             .eq('assignee_id', profile.id)
@@ -36,7 +37,8 @@ export default async function DashboardPage() {
             ? Promise.all([
                 supabase.from('profiles').select('*', { count: 'exact', head: true }),
                 supabase.from('tasks').select('*', { count: 'exact', head: true }).neq('status', 'Completed'),
-                supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('status', 'Review')
+                supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('status', 'Review'),
+                supabase.from('leave_requests').select('*', { count: 'exact', head: true }).eq('status', 'Pending')
             ])
             : Promise.all([
                 supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('assignee_id', profile.id),
@@ -64,7 +66,7 @@ export default async function DashboardPage() {
             : Promise.resolve(null),
 
         profile.role === 'Admin' ? supabase.from('clients').select('monthly_charges') : Promise.resolve({ data: [] }),
-        profile.role === 'Admin' ? supabase.from('profiles').select('*').eq('role', 'Employee') : Promise.resolve({ data: [] }),
+        profile.role === 'Admin' ? supabase.from('profiles').select('*').in('role', ['Employee', 'Freelancer']) : Promise.resolve({ data: [] }),
         profile.role === 'Admin'
             ? supabase.from('attendance')
                 .select('user_id, date, status')
@@ -80,11 +82,18 @@ export default async function DashboardPage() {
 
         profile.role === 'Admin'
             ? supabase.from('attendance').select('user_id, date').order('date', { ascending: true })
-            : supabase.from('attendance').select('date').eq('user_id', profile.id).order('date', { ascending: true }).limit(1)
+            : supabase.from('attendance').select('date').eq('user_id', profile.id).order('date', { ascending: true }).limit(1),
+
+        profile.role === 'Admin'
+            ? Promise.all([
+                supabase.from('tasks').select('*, assignee:profiles!tasks_assignee_id_fkey(name, avatar_url)').eq('status', 'Review').order('created_at', { ascending: false }).limit(3),
+                supabase.from('leave_requests').select('*, user:profiles(name, avatar_url)').eq('status', 'Pending').order('created_at', { ascending: false }).limit(3)
+            ])
+            : Promise.resolve([[], []] as any)
     ]);
 
     const newTasksCount = tasksRes?.count || 0;
-    const leaveRequests = leaveRequestsRes?.data || [];
+    const leaveRequests = allLeaveRequestsRes?.data || [];
     const firstAttendances = firstAttendancesRes?.data || [];
     const attendanceDays = attendanceRes?.data?.map((d: any) => d.date) || [];
     const todayStr = format(now, 'yyyy-MM-dd');
@@ -104,23 +113,39 @@ export default async function DashboardPage() {
     const workDays = Array.from(new Set(activityDates));
     const recentTasks = recentTasksRes?.data || [];
     let statsList: any[] = [];
+    let combinedApprovals: any[] = [];
+    let totalApprovalsPending = 0;
 
     if (profile.role === 'Admin') {
-        const totalEarnings = (clientsRes?.data || []).reduce((acc: number, c: any) => acc + Number(c.monthly_charges || 0), 0);
-        const employees = allEmployeesRes?.data || [];
+        const allProfiles = allProfilesRes?.data || [];
+        const employees = allProfiles.filter((p: any) => p.role === 'Employee');
+        const freelancers = allProfiles.filter((p: any) => p.role === 'Freelancer');
+
         const attendance = allAttendanceRes?.data || [];
-        const totalSalary = employees.reduce((acc: number, emp: any) => {
+        const employeesSalary = employees.reduce((acc: number, emp: any) => {
             const empAttendance = attendance.filter((a: any) => a.user_id === emp.id);
             const joiningDate = firstAttendances.find((a: any) => a.user_id === emp.id)?.date;
             const calc = calculateSalary(Number(emp.salary || 0), Number(emp.deduction_amount || 0), empAttendance, [], joiningDate);
             return acc + calc.finalSalary;
         }, 0);
 
+        const freelancerPayouts = freelancers.reduce((acc: number, f: any) => acc + Number(f.wallet_balance || 0), 0);
+        const totalPayouts = employeesSalary + freelancerPayouts;
+
         statsList = [
             { label: 'Total team', value: (statsRes as any)[0].count || 0, icon: Users, href: '/dashboard/admin/users', color: 'bg-indigo-500' },
-            { label: 'Total Earnings', value: `₹${totalEarnings.toLocaleString('en-IN')}`, icon: Wallet, href: '/dashboard/admin/clients', color: 'bg-emerald-500' },
-            { label: 'Total Salary', value: `₹${totalSalary.toLocaleString('en-IN')}`, icon: Clock, href: '/dashboard/admin/payments', color: 'bg-orange-500' },
+            { label: 'Total Active Tasks', value: (statsRes as any)[1].count || 0, icon: ClipboardList, href: '/dashboard/tasks', color: 'bg-emerald-500' },
+            { label: 'Total Payouts', value: `₹${totalPayouts.toLocaleString('en-IN')}`, icon: Banknote, href: '/dashboard/admin/payments', color: 'bg-orange-500' },
         ];
+
+        totalApprovalsPending = ((statsRes as any)[2].count || 0) + ((statsRes as any)[3].count || 0);
+
+        const [reviewTasks, pLeaves] = approvalItemsRes as any;
+        combinedApprovals = [
+            ...(reviewTasks?.data || []).map((t: any) => ({ ...t, type: 'task' })),
+            ...(pLeaves?.data || []).map((l: any) => ({ ...l, type: 'leave' }))
+        ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 3);
+
     } else {
         if (profile.role === 'Freelancer') {
             statsList = [
@@ -185,6 +210,23 @@ export default async function DashboardPage() {
                             </Button>
                         </div>
                     )}
+
+                    {profile.role === 'Admin' && totalApprovalsPending > 0 && (
+                        <div className="bg-primary/5 border border-primary/10 shadow-sm rounded-xl p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                                    <AlertCircle className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-foreground">Approval Required</h3>
+                                    <p className="text-sm text-muted-foreground font-medium">There are {totalApprovalsPending} items (tasks/leaves) waiting for your approval.</p>
+                                </div>
+                            </div>
+                            <Button asChild className="rounded-lg bg-primary hover:bg-primary/90 text-white font-bold px-6">
+                                <Link href="/dashboard/admin/approvals">Review Now</Link>
+                            </Button>
+                        </div>
+                    )}
                 </div>
 
                 <div className="space-y-6">
@@ -226,6 +268,54 @@ export default async function DashboardPage() {
                         ))}
                     </div>
                 </div>
+
+                {profile.role === 'Admin' && (
+                    <div className="space-y-6">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-lg font-bold text-foreground">Needs Approval</h2>
+                            <Button variant="ghost" asChild className="text-primary font-bold text-xs h-9 hover:bg-primary/5 rounded-lg px-4">
+                                <Link href="/dashboard/admin/approvals">View All</Link>
+                            </Button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {combinedApprovals.map((item: any) => (
+                                <Link key={item.id} href={item.type === 'task' ? `/dashboard/tasks/${item.id}` : `/dashboard/admin/approvals`}>
+                                    <Card className="border border-border shadow-sm rounded-xl overflow-hidden bg-white p-5 space-y-4 hover:border-primary/20 hover:shadow-md transition-all duration-300 cursor-pointer h-full">
+                                        <div className="flex items-center justify-between">
+                                            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md uppercase tracking-wider bg-primary/5 text-primary border border-primary/10`}>
+                                                {item.type === 'task' ? 'Review Task' : 'Leave Request'}
+                                            </span>
+                                            <div className="flex items-center gap-1.5 text-muted-foreground font-bold text-[10px]">
+                                                <CalendarIcon className="w-3 h-3" />
+                                                {format(new Date(item.created_at), 'MMM dd')}
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <h4 className="font-bold text-sm leading-tight text-foreground line-clamp-2">
+                                                {item.type === 'task' ? item.title : `Leave: ${item.reason}`}
+                                            </h4>
+                                            <p className="text-xs text-muted-foreground line-clamp-1 font-medium">
+                                                {item.type === 'task' ? item.description : format(new Date(item.date), 'EEEE, MMM dd')}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2.5 pt-3 border-t border-border/50">
+                                            <div className="w-6 h-6 rounded-full bg-muted overflow-hidden text-[10px] flex items-center justify-center font-bold text-muted-foreground border border-white">
+                                                {item.type === 'task'
+                                                    ? (item.assignee?.avatar_url ? <Image src={item.assignee.avatar_url} alt="" width={24} height={24} unoptimized /> : item.assignee?.name?.charAt(0) || '?')
+                                                    : (item.user?.avatar_url ? <Image src={item.user.avatar_url} alt="" width={24} height={24} unoptimized /> : item.user?.name?.charAt(0) || '?')
+                                                }
+                                            </div>
+                                            <span className="text-[10px] font-bold text-foreground truncate uppercase tracking-tight">
+                                                {item.type === 'task' ? (item.assignee?.name || 'Unassigned') : (item.user?.name || 'Unknown')}
+                                            </span>
+                                        </div>
+                                    </Card>
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="w-full xl:w-[320px] shrink-0 space-y-6">

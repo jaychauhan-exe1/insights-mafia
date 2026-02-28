@@ -17,13 +17,13 @@ import { Card } from '@/components/ui/card';
 import { ReviewTaskDialog } from './review-task-dialog';
 import { EditTaskDialog } from './edit-task-dialog';
 import { AdminStatusSelect } from './admin-status-select';
-import { TaskDateFilter } from './date-filter';
+import { TaskFilters } from '@/components/dashboard/task-filters';
 import Image from 'next/image';
 import Link from 'next/link';
 import { startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
 
-export default async function TasksPage({ searchParams }: { searchParams: Promise<{ page?: string; year?: string; month?: string }> }) {
-    const { page: pageParam, year, month } = await searchParams;
+export default async function TasksPage({ searchParams }: { searchParams: Promise<{ page?: string; year?: string; month?: string; day?: string; assignee?: string; status?: string }> }) {
+    const { page: pageParam, year, month, day, assignee, status } = await searchParams;
     const profile = await getProfile();
     const supabase = await createAdminClient();
 
@@ -52,14 +52,31 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
         const selectedYear = parseInt(year);
         if (month && month !== '0') {
             const selectedMonth = parseInt(month) - 1;
-            const startDate = startOfMonth(new Date(selectedYear, selectedMonth)).toISOString();
-            const endDate = endOfMonth(new Date(selectedYear, selectedMonth)).toISOString();
-            query = query.gte('created_at', startDate).lte('created_at', endDate);
+            if (day && day !== '0') {
+                const selectedDay = parseInt(day);
+                const startDate = new Date(selectedYear, selectedMonth, selectedDay).toISOString();
+                const endDate = new Date(selectedYear, selectedMonth, selectedDay, 23, 59, 59).toISOString();
+                query = query.gte('created_at', startDate).lte('created_at', endDate);
+            } else {
+                const startDate = startOfMonth(new Date(selectedYear, selectedMonth)).toISOString();
+                const endDate = endOfMonth(new Date(selectedYear, selectedMonth)).toISOString();
+                query = query.gte('created_at', startDate).lte('created_at', endDate);
+            }
         } else {
             const startDate = startOfYear(new Date(selectedYear, 0)).toISOString();
             const endDate = endOfYear(new Date(selectedYear, 0)).toISOString();
             query = query.gte('created_at', startDate).lte('created_at', endDate);
         }
+    }
+
+    // Apply Assignee Filter
+    if (assignee && assignee !== '0') {
+        query = query.eq('assignee_id', assignee);
+    }
+
+    // Apply Status Filter
+    if (status && status !== '0') {
+        query = query.eq('status', status);
     }
 
     const { data: tasks, count } = await query
@@ -83,7 +100,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
             </header>
 
             <div className="flex flex-col sm:flex-row justify-between items-end sm:items-center gap-4 pt-2">
-                <TaskDateFilter />
+                <TaskFilters users={users || []} />
 
                 {/* Pagination Controls */}
                 {totalPages > 1 && (

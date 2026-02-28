@@ -1,13 +1,21 @@
 import { createAdminClient } from '@/lib/supabase/server';
-import { format } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft, Briefcase, Globe, IndianRupee, ExternalLink, Calendar, CheckCircle2, Clock } from 'lucide-react';
 import Link from 'next/link';
+import { TaskFilters } from '@/components/dashboard/task-filters';
 
-export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ClientDetailPage({
+    params,
+    searchParams
+}: {
+    params: Promise<{ id: string }>,
+    searchParams: Promise<{ year?: string; month?: string; day?: string; assignee?: string; status?: string }>
+}) {
     const { id } = await params;
+    const { year, month, day, assignee, status } = await searchParams;
     const supabase = await createAdminClient();
 
     const { data: client } = await supabase
@@ -18,26 +26,62 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
 
     if (!client) return <div>Client not found</div>;
 
-    const { data: tasks } = await supabase
+    // Build the query for tasks
+    let query = supabase
         .from('tasks')
         .select(`
             *,
             assignee:profiles!tasks_assignee_id_fkey(name, avatar_url)
         `)
-        .eq('client_id', id)
-        .order('created_at', { ascending: false });
+        .eq('client_id', id);
+
+    // Apply Filters
+    if (year) {
+        const selectedYear = parseInt(year);
+        if (month && month !== '0') {
+            const selectedMonth = parseInt(month) - 1;
+            if (day && day !== '0') {
+                const selectedDay = parseInt(day);
+                const startDate = new Date(selectedYear, selectedMonth, selectedDay).toISOString();
+                const endDate = new Date(selectedYear, selectedMonth, selectedDay, 23, 59, 59).toISOString();
+                query = query.gte('created_at', startDate).lte('created_at', endDate);
+            } else {
+                const startDate = startOfMonth(new Date(selectedYear, selectedMonth)).toISOString();
+                const endDate = endOfMonth(new Date(selectedYear, selectedMonth)).toISOString();
+                query = query.gte('created_at', startDate).lte('created_at', endDate);
+            }
+        } else {
+            const startDate = startOfYear(new Date(selectedYear, 0)).toISOString();
+            const endDate = endOfYear(new Date(selectedYear, 0)).toISOString();
+            query = query.gte('created_at', startDate).lte('created_at', endDate);
+        }
+    }
+
+    if (assignee && assignee !== '0') {
+        query = query.eq('assignee_id', assignee);
+    }
+
+    if (status && status !== '0') {
+        query = query.eq('status', status);
+    }
+
+    const { data: tasks } = await query.order('created_at', { ascending: false });
+    const { data: users } = await supabase.from('profiles').select('*').order('name');
 
     const activeTasks = tasks?.filter(t => t.status !== 'Completed') || [];
     const completedTasks = tasks?.filter(t => t.status === 'Completed') || [];
 
     return (
         <div className="space-y-6 mx-auto pb-20">
-            <Link href="/dashboard/admin/clients" className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-all duration-300 font-bold text-[10px] uppercase tracking-widest group">
-                <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform duration-300" />
-                Back to Clients
-            </Link>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <Link href="/dashboard/admin/clients" className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-all duration-300 font-bold text-[10px] uppercase tracking-widest group">
+                    <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform duration-300" />
+                    Back to Clients
+                </Link>
+                <TaskFilters users={users || []} />
+            </div>
 
-            <div className="grid lg:grid-cols-3 gap-6">
+            <div className="grid lg:grid-cols-4 gap-6">
                 {/* Client Profile Sidebar */}
                 <div className="lg:col-span-1 space-y-6">
                     <Card className="border border-border/50 shadow-sm rounded-xl bg-white overflow-hidden">
@@ -107,7 +151,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                 </div>
 
                 {/* Tasks List */}
-                <div className="lg:col-span-2 space-y-6">
+                <div className="lg:col-span-3 space-y-6">
                     <Card className="border border-border/50 shadow-sm rounded-xl bg-white overflow-hidden">
                         <CardHeader className="px-6 py-4 border-b border-border/50 bg-muted/30">
                             <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">

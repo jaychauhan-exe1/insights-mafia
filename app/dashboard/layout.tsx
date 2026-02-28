@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { getSession } from '@/lib/auth';
 import Image from 'next/image';
 import { MobileNav } from '@/components/mobile-nav';
+import { SidebarNav } from '@/components/dashboard/sidebar-nav';
 
 export default async function DashboardLayout({
     children,
@@ -53,18 +54,6 @@ export default async function DashboardLayout({
 
     navigation.push({ label: 'Account', href: '/dashboard/account', iconName: 'UserCircle' });
 
-    const icons: Record<string, any> = {
-        LayoutDashboard,
-        Home,
-        ClipboardList,
-        Users,
-        Briefcase,
-        Clock,
-        Banknote,
-        Wallet,
-        UserCircle
-    };
-
     return (
         <div className="flex min-h-screen bg-background font-sans antialiased text-foreground">
             {/* Sidebar Desktop */}
@@ -74,21 +63,7 @@ export default async function DashboardLayout({
                 </div>
 
                 <nav className="flex-1 px-3 overflow-y-auto">
-                    <div className="space-y-1">
-                        {navigation.map((item) => {
-                            const Icon = icons[item.iconName];
-                            return (
-                                <Link
-                                    key={item.label}
-                                    href={item.href}
-                                    className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold text-muted-foreground hover:text-primary hover:bg-muted group transition-all duration-300"
-                                >
-                                    {Icon && <Icon className="w-[18px] h-[18px] text-muted-foreground group-hover:text-primary transition-colors duration-300" />}
-                                    {item.label}
-                                </Link>
-                            );
-                        })}
-                    </div>
+                    <SidebarNav items={navigation} />
                 </nav>
 
                 <div className="p-6 border-t border-border">
