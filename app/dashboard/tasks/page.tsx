@@ -20,7 +20,7 @@ import { AdminStatusSelect } from './admin-status-select';
 import { TaskFilters } from '@/components/dashboard/task-filters';
 import Image from 'next/image';
 import Link from 'next/link';
-import { startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
 
 export default async function TasksPage({ searchParams }: { searchParams: Promise<{ page?: string; year?: string; month?: string; day?: string; assignee?: string; status?: string }> }) {
     const { page: pageParam, year, month, day, assignee, status } = await searchParams;
@@ -126,7 +126,8 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
                     <Table>
                         <TableHeader className="bg-muted/50">
                             <TableRow className="border-border hover:bg-transparent h-12">
-                                <TableHead className="px-6 font-bold text-[10px] text-muted-foreground uppercase tracking-widest">Assignee</TableHead>
+                                <TableHead className="px-6 font-bold text-[10px] text-muted-foreground uppercase tracking-widest">Date</TableHead>
+                                <TableHead className="font-bold text-[10px] text-muted-foreground uppercase tracking-widest">Assignee</TableHead>
                                 <TableHead className="font-bold text-[10px] text-muted-foreground uppercase tracking-widest">Client</TableHead>
                                 <TableHead className="font-bold text-[10px] text-muted-foreground uppercase tracking-widest min-w-[200px]">Description</TableHead>
                                 {profile.role !== 'Employee' && (
@@ -139,6 +140,16 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
                         <TableBody>
                             {tasks?.map((task) => (
                                 <TableRow key={task.id} className="border-border group h-20 hover:bg-muted/30 transition-all duration-300">
+                                    <TableCell className="px-6">
+                                        <div className="flex flex-col">
+                                            <p className="font-bold text-[13px] text-foreground tabular-nums">
+                                                {format(new Date(task.status === 'Completed' ? task.completed_at : task.created_at), 'MMM dd, yyyy')}
+                                            </p>
+                                            <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter mt-0.5">
+                                                {task.status === 'Completed' ? 'Completed' : 'Created'}
+                                            </p>
+                                        </div>
+                                    </TableCell>
                                     <TableCell className="px-6 leading-none">
                                         <div className="flex items-center gap-3">
                                             <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground font-bold text-xs border border-white shadow-sm overflow-hidden whitespace-nowrap">

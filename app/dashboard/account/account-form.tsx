@@ -11,12 +11,15 @@ import Image from 'next/image';
 import { LogOut } from 'lucide-react';
 
 const AVATARS = [
-    'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix',
-    'https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka',
-    'https://api.dicebear.com/7.x/avataaars/svg?seed=Buddy',
-    'https://api.dicebear.com/7.x/avataaars/svg?seed=Caleb',
-    'https://api.dicebear.com/7.x/avataaars/svg?seed=Daisy',
-    'https://api.dicebear.com/7.x/avataaars/svg?seed=Eden',
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=d',
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=Jessica',
+    'https://api.dicebear.com/9.x/avataaars/svg?seed=Eden',
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=Vivian',
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=Luis',
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=Nolan',
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=Amaya',
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=dd',
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=dddd',
 ];
 
 export default function AccountPage({ profile }: { profile: any }) {

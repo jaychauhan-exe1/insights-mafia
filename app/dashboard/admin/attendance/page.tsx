@@ -69,13 +69,41 @@ export default async function AdminAttendancePage({ searchParams }: { searchPara
         .order('check_in', { ascending: false, nullsFirst: false })
         .range(start, end);
 
+    const getISTTime = () => {
+        const now = new Date();
+        const offset = 5.5 * 60 * 60 * 1000;
+        return new Date(now.getTime() + offset);
+    };
+
+    const isAfterCheckoutWindow = (recordDate: string) => {
+        const ist = getISTTime();
+        const todayStr = format(ist, 'yyyy-MM-dd');
+
+        return recordDate < todayStr;
+    };
+
     // Today's stats
-    const today = format(new Date(), 'yyyy-MM-dd');
+    const today = format(getISTTime(), 'yyyy-MM-dd');
     const todayRecords = allRecords?.filter(r => r.date === today) || [];
-    const presentToday = todayRecords.filter(r => r.status === 'Present').length;
+
+    // An employee is considered "Present" only if they checked in AND didn't miss the checkout window (if it's past midnight)
+    // Actually, "Present Today" usually means they showed up. 
+    // But the user said "mark him absent if forgets to checkout before 12am".
+    const presentToday = todayRecords.filter(r => {
+        if (r.status === 'Absent') return false;
+        if (!r.check_out && isAfterCheckoutWindow(r.date)) return false;
+        if (r.status === 'Half Day') return true; // Half Day is still present in a way? Or should I treat it differently? 
+        return r.status === 'Present';
+    }).length;
+
     const absentToday = employeeIds.length - presentToday;
 
-    const history = paginatedHistory || [];
+    const history = paginatedHistory?.map(entry => {
+        if (entry.status === 'Present' && !entry.check_out && isAfterCheckoutWindow(entry.date)) {
+            return { ...entry, status: 'Absent' };
+        }
+        return entry;
+    }) || [];
 
     return (
         <div className="space-y-6 mx-auto pb-20 lg:pb-0">
@@ -211,6 +239,7 @@ export default async function AdminAttendancePage({ searchParams }: { searchPara
                                     <TableHead className="font-bold text-[10px] text-muted-foreground uppercase tracking-widest">Date</TableHead>
                                     <TableHead className="font-bold text-[10px] text-muted-foreground uppercase tracking-widest">Status</TableHead>
                                     <TableHead className="font-bold text-[10px] text-muted-foreground uppercase tracking-widest">Time (In/Out)</TableHead>
+                                    <TableHead className="font-bold text-[10px] text-muted-foreground uppercase tracking-widest">Place</TableHead>
                                     <TableHead className="text-right px-6 font-bold text-[10px] text-muted-foreground uppercase tracking-widest">Location Insights</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -252,6 +281,31 @@ export default async function AdminAttendancePage({ searchParams }: { searchPara
                                                 {entry.check_out ? format(new Date(entry.check_out), 'HH:mm') : '...'}
                                             </div>
                                         </TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-col gap-1.5">
+                                                {entry.check_in_workplace && (
+                                                    <div className="flex items-center gap-2 text-[9px] font-bold text-muted-foreground">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                                        <span className="opacity-40 uppercase tracking-tighter">In:</span>
+                                                        <span className={entry.check_in_workplace === 'Office' ? 'text-indigo-600' : 'text-foreground'}>
+                                                            {entry.check_in_workplace}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {entry.check_out_workplace && (
+                                                    <div className="flex items-center gap-2 text-[9px] font-bold text-muted-foreground">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                                        <span className="opacity-40 uppercase tracking-tighter">Out:</span>
+                                                        <span className={entry.check_out_workplace === 'Office' ? 'text-indigo-600' : 'text-foreground'}>
+                                                            {entry.check_out_workplace}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {!entry.check_in_workplace && !entry.check_out_workplace && (
+                                                    <span className="text-[9px] font-bold text-muted-foreground/20 italic uppercase tracking-widest">Not specified</span>
+                                                )}
+                                            </div>
+                                        </TableCell>
                                         <TableCell className="text-right px-6">
                                             <div className="flex flex-col items-end gap-1.5">
                                                 {entry.check_in_location && (
@@ -274,7 +328,7 @@ export default async function AdminAttendancePage({ searchParams }: { searchPara
                                     </TableRow>
                                 )) : (
                                     <TableRow>
-                                        <TableCell colSpan={5} className="py-20 text-center">
+                                        <TableCell colSpan={6} className="py-20 text-center">
                                             <p className="text-muted-foreground/30 text-[11px] font-bold uppercase tracking-[0.2em]">No recent activity logged</p>
                                         </TableCell>
                                     </TableRow>
@@ -323,6 +377,22 @@ export default async function AdminAttendancePage({ searchParams }: { searchPara
                                     </p>
                                 </div>
                             </div>
+                            {(entry.check_in_workplace || entry.check_out_workplace) && (
+                                <div className="grid grid-cols-2 gap-4 py-3 border-b border-border/50">
+                                    <div>
+                                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1">In Place</p>
+                                        <p className="text-[10px] font-bold text-foreground truncate">
+                                            {entry.check_in_workplace || '-'}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Out Place</p>
+                                        <p className="text-[10px] font-bold text-foreground truncate">
+                                            {entry.check_out_workplace || '-'}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                             {entry.check_in_location && (
                                 <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground">
                                     <MapPin className="w-3.5 h-3.5 opacity-40" />

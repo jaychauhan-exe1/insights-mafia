@@ -163,15 +163,26 @@ export default async function ClientDetailPage({
                             <Table>
                                 <TableHeader className="bg-muted/50">
                                     <TableRow className="border-border hover:bg-transparent h-10">
-                                        <TableHead className="px-6 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Tasks</TableHead>
+                                        <TableHead className="px-6 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Date</TableHead>
+                                        <TableHead className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Tasks</TableHead>
                                         <TableHead className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Managed</TableHead>
-                                        <TableHead className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Timeline</TableHead>
+                                        <TableHead className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Deadline</TableHead>
                                         <TableHead className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-right px-6">Payout</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {tasks && tasks.length > 0 ? tasks.map((task) => (
                                         <TableRow key={task.id} className="border-border hover:bg-muted/30 transition-all duration-300 group h-20">
+                                            <TableCell className="px-6">
+                                                <div className="flex flex-col">
+                                                    <p className="font-bold text-[13px] text-foreground tabular-nums">
+                                                        {format(new Date(task.status === 'Completed' ? task.completed_at : task.created_at), 'MMM dd, yyyy')}
+                                                    </p>
+                                                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter mt-0.5">
+                                                        {task.status === 'Completed' ? 'Completed' : 'Created'}
+                                                    </p>
+                                                </div>
+                                            </TableCell>
                                             <TableCell className="px-6">
                                                 <div className="flex flex-col gap-0.5">
                                                     <Link href={`/dashboard/tasks/${task.id}`} className="font-bold text-[13px] text-foreground hover:text-primary transition-colors duration-300">
@@ -217,7 +228,7 @@ export default async function ClientDetailPage({
                                         </TableRow>
                                     )) : (
                                         <TableRow>
-                                            <TableCell colSpan={4} className="py-20 text-center">
+                                            <TableCell colSpan={5} className="py-20 text-center">
                                                 <div className="flex flex-col items-center">
                                                     <div className="w-12 h-12 rounded-lg bg-muted/50 flex items-center justify-center mb-4">
                                                         <Briefcase className="w-6 h-6 text-muted-foreground/20" />

@@ -40,7 +40,7 @@ interface AttendanceRecord {
     date: string;
     check_in?: string | null;
     check_out?: string | null;
-    status: 'Present' | 'Absent' | 'Off' | 'Paid Off';
+    status: 'Present' | 'Absent' | 'Off' | 'Paid Off' | 'Half Day';
     check_in_location?: { latitude: number; longitude: number } | null;
     check_out_location?: { latitude: number; longitude: number } | null;
     user?: {
@@ -64,16 +64,34 @@ export function AttendanceCalendar({ records, joiningDate }: { records: Attendan
         end: calendarEnd
     });
 
+    const getISTTime = () => {
+        const now = new Date();
+        const offset = 5.5 * 60 * 60 * 1000;
+        return new Date(now.getTime() + offset);
+    };
+
+    const isAfterCheckoutWindow = (recordDate: string) => {
+        const ist = getISTTime();
+        const todayStr = format(ist, 'yyyy-MM-dd');
+
+        return recordDate < todayStr;
+    };
+
     const getStatusForDay = (day: Date) => {
         const dateStr = format(day, 'yyyy-MM-dd');
-        return records.filter(r => r.date === dateStr);
+        return records.map(r => {
+            if (r.date === dateStr && r.status === 'Present' && !r.check_out && isAfterCheckoutWindow(r.date)) {
+                return { ...r, status: 'Absent' as const };
+            }
+            return r;
+        }).filter(r => r.date === dateStr);
     };
 
     const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
     const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
 
     const selectedDateRecords = selectedDate
-        ? records.filter(r => r.date === format(selectedDate, 'yyyy-MM-dd'))
+        ? getStatusForDay(selectedDate)
         : [];
 
     return (
@@ -105,10 +123,15 @@ export function AttendanceCalendar({ records, joiningDate }: { records: Attendan
                             const dayRecords = getStatusForDay(day);
                             const isCurrentMonth = isSameMonth(day, monthStart);
                             const isDayToday = isToday(day);
-                            const isPastDay = day < new Date() && !isDayToday;
+                            const istToday = getISTTime();
+                            const isPastDay = day < istToday && !isSameDay(day, istToday);
                             const isWeekday = day.getDay() !== 0 && day.getDay() !== 6;
 
-                            let mainStatus = dayRecords.length > 0 ? (dayRecords.some(r => r.status === 'Present') ? 'Present' : dayRecords[0].status) : null;
+                            let mainStatus = dayRecords.length > 0 ? (
+                                dayRecords.some(r => r.status === 'Present') ? 'Present' :
+                                    dayRecords.some(r => r.status === 'Half Day') ? 'Half Day' :
+                                        dayRecords[0].status
+                            ) : null;
 
                             const joiningDateObj = joiningDate ? parseISO(joiningDate) : null;
                             const isBeforeJoining = joiningDateObj && day < joiningDateObj && !isSameDay(day, joiningDateObj);
@@ -130,8 +153,9 @@ export function AttendanceCalendar({ records, joiningDate }: { records: Attendan
                                     </span>
                                     {mainStatus && (
                                         <Badge className={`border-none text-[8px] font-bold h-4 px-1.5 leading-none uppercase tracking-tighter shadow-none ${mainStatus === 'Present' ? 'bg-emerald-500/10 text-emerald-600' :
-                                            mainStatus === 'Off' || mainStatus === 'Paid Off' ? 'bg-blue-500/10 text-blue-600' :
-                                                'bg-red-500/10 text-red-600'
+                                            mainStatus === 'Half Day' ? 'bg-amber-500/10 text-amber-600' :
+                                                mainStatus === 'Off' || mainStatus === 'Paid Off' ? 'bg-blue-500/10 text-blue-600' :
+                                                    'bg-red-500/10 text-red-600'
                                             }`}>
                                             {dayRecords.length > 1 ? `${dayRecords.length} Records` : (mainStatus === 'Paid Off' ? 'Off' : mainStatus)}
                                         </Badge>
@@ -145,6 +169,10 @@ export function AttendanceCalendar({ records, joiningDate }: { records: Attendan
                         <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
                             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Present</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.4)]" />
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Half Day</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
@@ -196,8 +224,9 @@ export function AttendanceCalendar({ records, joiningDate }: { records: Attendan
                                                 </TableCell>
                                                 <TableCell className="text-center">
                                                     <Badge className={`border-none text-[8px] font-bold h-4 px-1.5 uppercase ${record.status === 'Present' ? 'bg-emerald-50 text-emerald-500' :
-                                                        record.status === 'Off' || record.status === 'Paid Off' ? 'bg-blue-50 text-blue-500' :
-                                                            'bg-red-50 text-red-500'
+                                                        record.status === 'Half Day' ? 'bg-amber-50 text-amber-500' :
+                                                            record.status === 'Off' || record.status === 'Paid Off' ? 'bg-blue-50 text-blue-500' :
+                                                                'bg-red-50 text-red-500'
                                                         }`}>
                                                         {record.status === 'Paid Off' ? 'Off' : record.status}
                                                     </Badge>

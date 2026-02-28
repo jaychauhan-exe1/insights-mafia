@@ -6,7 +6,9 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, startOf
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import Image from 'next/image';
+import { Badge } from '@/components/ui/badge';
 import { calculateSalary } from '@/lib/salary-utils';
+import { DismissableNotice } from '@/components/dashboard/dismissable-notice';
 
 export default async function DashboardPage() {
     const profile = await getProfile();
@@ -155,11 +157,11 @@ export default async function DashboardPage() {
             ];
         } else {
             const myAttendance = (attendanceRes?.data || []) as any[];
-            const joiningDate = firstAttendances[0]?.date;
-            const myCalc = calculateSalary(Number(profile.salary || 0), Number(profile.deduction_amount || 0), myAttendance, leaveRequests, joiningDate);
+            const daysWorkedThisMonth = myAttendance.filter((a: any) => isSameMonth(new Date(a.date), now)).length;
+
             statsList = [
                 { label: 'My Tasks', value: (statsRes as any)[0].count || 0, icon: ClipboardList, href: '/dashboard/tasks', color: 'bg-indigo-500' },
-                { label: 'Month Payout', value: `₹${myCalc.finalSalary.toLocaleString('en-IN')}`, icon: Wallet, href: '/dashboard/employee/attendance', color: 'bg-emerald-500' },
+                { label: 'Days Worked', value: daysWorkedThisMonth, icon: CalendarIcon, href: '/dashboard/employee/attendance', color: 'bg-emerald-500' },
                 { label: 'Finished', value: (statsRes as any)[1].count || 0, icon: CheckCircle2, href: '/dashboard/tasks', color: 'bg-orange-500' },
             ];
         }
@@ -170,7 +172,7 @@ export default async function DashboardPage() {
     const calendarStart = startOfWeek(monthStart);
     const calendarEnd = endOfWeek(monthEnd);
     const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
-    const avatarUrl = profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.id}`;
+    const avatarUrl = profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=d`;
 
     return (
         <div className="flex flex-col xl:flex-row gap-8">
@@ -195,36 +197,77 @@ export default async function DashboardPage() {
 
                 <div className="space-y-4">
                     {profile.role === 'Employee' && !isCheckedInToday && (
-                        <div className="bg-red-50 border border-red-100 shadow-sm rounded-xl p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-lg bg-red-100 flex items-center justify-center text-red-600">
-                                    <AlertCircle className="w-6 h-6" />
+                        <DismissableNotice id="attendance_reminder">
+                            <div className="bg-red-50 border border-red-100 shadow-sm rounded-xl p-6 flex flex-col sm:flex-row items-center justify-between gap-6 mr-8 sm:mr-0 min-h-[100px]">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-lg bg-red-100 flex items-center justify-center text-red-600">
+                                        <AlertCircle className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-red-900">Attendance Reminder</h3>
+                                        <p className="text-sm text-red-700 font-medium">You haven't checked in for today yet. Please record your attendance.</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h3 className="font-bold text-red-900">Attendance Reminder</h3>
-                                    <p className="text-sm text-red-700 font-medium">You haven't checked in for today yet. Please record your attendance.</p>
-                                </div>
+                                <Button asChild className="rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold px-6">
+                                    <Link href="/dashboard/employee/attendance">Check In Now</Link>
+                                </Button>
                             </div>
-                            <Button asChild className="rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold px-6">
-                                <Link href="/dashboard/employee/attendance">Check In Now</Link>
-                            </Button>
-                        </div>
+                        </DismissableNotice>
                     )}
 
                     {profile.role === 'Admin' && totalApprovalsPending > 0 && (
-                        <div className="bg-primary/5 border border-primary/10 shadow-sm rounded-xl p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                                    <AlertCircle className="w-6 h-6" />
+                        <DismissableNotice id="admin_approval_items">
+                            <div className="bg-primary/5 border border-primary/10 shadow-sm rounded-xl p-6 flex flex-col sm:flex-row items-center justify-between gap-6 mr-8 sm:mr-0 min-h-[100px]">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                                        <AlertCircle className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-foreground">Approval Required</h3>
+                                        <p className="text-sm text-muted-foreground font-medium">There are {totalApprovalsPending} items (tasks/leaves) waiting for your approval.</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h3 className="font-bold text-foreground">Approval Required</h3>
-                                    <p className="text-sm text-muted-foreground font-medium">There are {totalApprovalsPending} items (tasks/leaves) waiting for your approval.</p>
-                                </div>
+                                <Button asChild className="rounded-lg bg-primary hover:bg-primary/90 text-white font-bold px-6">
+                                    <Link href="/dashboard/admin/approvals">Review Now</Link>
+                                </Button>
                             </div>
-                            <Button asChild className="rounded-lg bg-primary hover:bg-primary/90 text-white font-bold px-6">
-                                <Link href="/dashboard/admin/approvals">Review Now</Link>
-                            </Button>
+                        </DismissableNotice>
+                    )}
+
+                    {profile.role === 'Employee' && (
+                        <div className="space-y-4">
+                            {leaveRequests.filter(l => l.status === 'Approved').map((leave: any) => (
+                                <DismissableNotice key={leave.id} id={`leave_approved_${leave.id}`}>
+                                    <div className="bg-emerald-50 border border-emerald-100 shadow-sm rounded-xl p-6 flex flex-col sm:flex-row items-center justify-between gap-6 mr-8 sm:mr-0 min-h-[100px]">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600">
+                                                <CheckCircle2 className="w-6 h-6" />
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-emerald-900">Leave Approved</h3>
+                                                <p className="text-sm text-emerald-700 font-medium">Your leave request for {format(new Date(leave.date), 'EEEE, MMM dd')} has been approved.</p>
+                                            </div>
+                                        </div>
+                                        <span className="bg-emerald-600 text-white font-bold text-[10px] px-2 py-0.5 rounded-full uppercase tracking-widest whitespace-nowrap">Approved</span>
+                                    </div>
+                                </DismissableNotice>
+                            ))}
+                            {leaveRequests.filter(l => l.status === 'Rejected').map((leave: any) => (
+                                <DismissableNotice key={leave.id} id={`leave_rejected_${leave.id}`}>
+                                    <div className="bg-red-50 border border-red-100 shadow-sm rounded-xl p-6 flex flex-col sm:flex-row items-center justify-between gap-6 mr-8 sm:mr-0 min-h-[100px]">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-lg bg-red-100 flex items-center justify-center text-red-600">
+                                                <AlertCircle className="w-6 h-6" />
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-red-900">Leave Rejected</h3>
+                                                <p className="text-sm text-red-700 font-medium">Your leave request for {format(new Date(leave.date), 'EEEE, MMM dd')} was rejected.</p>
+                                            </div>
+                                        </div>
+                                        <span className="bg-red-600 text-white font-bold text-[10px] px-2 py-0.5 rounded-full uppercase tracking-widest whitespace-nowrap">Rejected</span>
+                                    </div>
+                                </DismissableNotice>
+                            ))}
                         </div>
                     )}
                 </div>
