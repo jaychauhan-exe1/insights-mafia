@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { AttendanceButtons } from "./attendance-buttons";
 import { LeaveRequestModal } from "./leave-request-modal";
-import { Clock, CheckCircle2, History, Timer } from "lucide-react";
+import { Clock, CheckCircle2, History, Timer, Plane } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AttendanceCalendar } from "@/components/attendance-calendar";
 import Link from "next/link";
@@ -100,6 +100,13 @@ export default async function AttendancePage({
                     <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest mt-1">
                         Track your work presence and history
                     </p>
+                </div>
+                <div className="flex flex-col items-end">
+                    <p className="text-[10px] font-extrabold text-muted-foreground/40 uppercase tracking-[0.2em] mb-1">Paid Leaves Left</p>
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-100/50 shadow-sm">
+                        <span className="text-lg font-bold text-emerald-600 leading-none">{profile.paid_leaves ?? 1}</span>
+                        <Plane className="w-3.5 h-3.5 text-emerald-400 rotate-12" />
+                    </div>
                 </div>
             </header>
 

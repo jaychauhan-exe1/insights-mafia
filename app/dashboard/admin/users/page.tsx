@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { CreateUserDialog } from './create-user-dialog';
 import { EditUserDialog } from './edit-user-dialog';
 import { DeleteUserButton } from './delete-user-button';
-import { Mail, Shield, Calendar, UserPlus } from 'lucide-react';
+import { Mail, Shield, Calendar, UserPlus, Eye } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 
 import { Button } from '@/components/ui/button';
@@ -90,7 +90,9 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                                                 )}
                                             </div>
                                             <div>
-                                                <p className="font-bold text-[13px] text-foreground leading-none">{u.name}</p>
+                                                <Link href={`/dashboard/admin/users/${u.id}`} className="hover:underline decoration-primary/30 underline-offset-4">
+                                                    <p className="font-bold text-[13px] text-foreground leading-none">{u.name}</p>
+                                                </Link>
                                             </div>
                                         </div>
                                     </TableCell>
@@ -112,12 +114,14 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                                         <p className="text-[12px] font-bold text-foreground">
                                             {new Date(u.created_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
                                         </p>
-                                        <div className="flex items-center justify-end gap-2 mt-0.5">
-                                            <p className="text-[9px] font-bold text-muted-foreground/30 uppercase tracking-tighter leading-none">Record Active</p>
-                                            <div className="flex items-center gap-1">
-                                                <EditUserDialog user={u} />
-                                                <DeleteUserButton userId={u.id} userName={u.name} />
-                                            </div>
+                                        <div className="flex items-center justify-end gap-1 mt-0.5">
+                                            <Link href={`/dashboard/admin/users/${u.id}`}>
+                                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-primary transition-colors">
+                                                    <Eye className="w-4 h-4" />
+                                                </Button>
+                                            </Link>
+                                            <EditUserDialog user={u} />
+                                            <DeleteUserButton userId={u.id} userName={u.name} />
                                         </div>
                                     </TableCell>
                                 </TableRow>
@@ -136,7 +140,9 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                                         {u.avatar_url ? <img src={u.avatar_url} alt="" className="w-full h-full object-cover" /> : u.name.charAt(0)}
                                     </div>
                                     <div>
-                                        <p className="font-bold text-[14px] text-foreground leading-none">{u.name}</p>
+                                        <Link href={`/dashboard/admin/users/${u.id}`}>
+                                            <p className="font-bold text-[14px] text-foreground leading-none hover:text-primary transition-colors">{u.name}</p>
+                                        </Link>
                                         <div className="flex items-center gap-1.5 mt-1.5">
                                             <div className={`w-1.5 h-1.5 rounded-full ${u.role === 'Admin' ? 'bg-primary' :
                                                 u.role === 'Employee' ? 'bg-indigo-500' : 'bg-orange-400'
@@ -146,6 +152,11 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-1">
+                                    <Link href={`/dashboard/admin/users/${u.id}`}>
+                                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground">
+                                            <Eye className="w-4 h-4" />
+                                        </Button>
+                                    </Link>
                                     <EditUserDialog user={u} />
                                     <DeleteUserButton userId={u.id} userName={u.name} />
                                 </div>

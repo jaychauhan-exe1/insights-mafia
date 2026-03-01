@@ -9,6 +9,7 @@ export interface Profile {
   wallet_balance?: number;
   salary?: number;
   deduction_amount?: number;
+  paid_leaves?: number;
   created_at: string;
 }
 

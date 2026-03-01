@@ -3,7 +3,12 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/supabase/get-profile";
 import { revalidatePath } from "next/cache";
-import { getISTISOString, getISTToday, getISTHours } from "@/lib/date-utils";
+import {
+  getISTISOString,
+  getISTToday,
+  getISTHours,
+  getISTParts,
+} from "@/lib/date-utils";
 
 const isWithinCheckInHours = () => {
   const hours = getISTHours();
@@ -12,9 +17,15 @@ const isWithinCheckInHours = () => {
 };
 
 const isWithinCheckOutHours = () => {
-  const hours = getISTHours();
-  // 10 AM to 12 AM (24:00)
-  return hours >= 10;
+  const parts = getISTParts();
+  const hours = parseInt(parts.hour);
+  const minutes = parseInt(parts.minute);
+
+  // Checkout allowed from 5:50 PM (17:50) onwards until midnight
+  if (hours > 17 || (hours === 17 && minutes >= 50)) {
+    return true;
+  }
+  return false;
 };
 
 export async function checkIn(
@@ -64,8 +75,34 @@ export async function checkOut(
   },
 ) {
   if (!isWithinCheckOutHours()) {
+    // We check duration even if outside window to provide better feedback
+    const profile = await getProfile();
+    const supabase = await createAdminClient();
+    const today = getISTToday();
+    const { data: currentEntry } = await supabase
+      .from("attendance")
+      .select("check_in")
+      .eq("user_id", profile?.id)
+      .eq("date", today)
+      .single();
+
+    if (currentEntry?.check_in) {
+      const checkInTime = new Date(currentEntry.check_in).getTime();
+      const checkOutTime = new Date().getTime();
+      const durationHours = (checkOutTime - checkInTime) / (1000 * 60 * 60);
+
+      if (durationHours >= 4 && durationHours < 8) {
+        return {
+          error: "REMAINING_WORK",
+          message:
+            "Please finish your 8 hours of full day work before checking out.",
+        };
+      }
+    }
+
     return {
-      error: "Check-out is only allowed after 10:00 AM IST on the day of work.",
+      error:
+        "Check-out is only allowed after 05:50 PM IST to ensure a full working day.",
     };
   }
 
@@ -113,7 +150,7 @@ export async function checkOut(
 }
 
 export async function submitLeaveRequest(data: {
-  date: string;
+  dates: string[];
   reason: string;
   will_work_sunday: boolean;
 }) {
@@ -122,13 +159,15 @@ export async function submitLeaveRequest(data: {
 
   const supabase = await createAdminClient();
 
-  const { error } = await supabase.from("leave_requests").insert({
+  const requests = data.dates.map((date) => ({
     user_id: profile.id,
-    date: data.date,
+    date,
     reason: data.reason,
     status: "Pending",
     will_work_sunday: data.will_work_sunday,
-  });
+  }));
+
+  const { error } = await supabase.from("leave_requests").insert(requests);
 
   if (error) return { error: error.message };
 

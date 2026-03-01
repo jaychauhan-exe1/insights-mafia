@@ -52,8 +52,18 @@ export function AttendanceButtons({ isCheckedIn, clients }: { isCheckedIn: boole
             const location = await getLocation();
             if (isCheckedIn) {
                 const res = await checkOut(selectedWorkplace, location ? { latitude: location.lat, longitude: location.lng } : undefined);
-                if (res.error) toast.error(res.error);
-                else {
+                if (res.error) {
+                    if (res.error === "REMAINING_WORK") {
+                        toast.error(res.message, {
+                            action: {
+                                label: "Go to Tasks",
+                                onClick: () => window.location.href = "/dashboard/tasks"
+                            },
+                        });
+                    } else {
+                        toast.error(res.error);
+                    }
+                } else {
                     toast.success('Check-out successful');
                     setSelectedWorkplace("");
                 }

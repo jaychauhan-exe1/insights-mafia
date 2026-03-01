@@ -21,7 +21,8 @@ import { Switch } from '@/components/ui/switch';
 export function LeaveRequestModal() {
     const [open, setOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+    const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+    const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [reason, setReason] = useState('');
     const [willWorkSunday, setWillWorkSunday] = useState(false);
 
@@ -29,10 +30,26 @@ export function LeaveRequestModal() {
         e.preventDefault();
         setIsLoading(true);
         try {
-            const res = await submitLeaveRequest({ date, reason, will_work_sunday: willWorkSunday });
+            // Generate array of dates between start and end
+            const dates: string[] = [];
+            let current = parseISO(startDate);
+            const end = parseISO(endDate);
+
+            if (current > end) {
+                toast.error("End date must be after start date");
+                setIsLoading(false);
+                return;
+            }
+
+            while (current <= end) {
+                dates.push(format(current, 'yyyy-MM-dd'));
+                current = new Date(current.getTime() + 24 * 60 * 60 * 1000);
+            }
+
+            const res = await submitLeaveRequest({ dates, reason, will_work_sunday: willWorkSunday });
             if (res.error) toast.error(res.error);
             else {
-                toast.success('Leave request submitted for approval');
+                toast.success(`Leave request submitted for ${dates.length} days`);
                 setOpen(false);
                 setReason('');
                 setWillWorkSunday(false);
@@ -60,18 +77,34 @@ export function LeaveRequestModal() {
                     </DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-6 pt-4">
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Date of Leave</label>
-                        <div className="relative">
-                            <CalendarIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                type="date"
-                                className="pl-10"
-                                value={date}
-                                onChange={(e) => setDate(e.target.value)}
-                                min={format(new Date(), 'yyyy-MM-dd')}
-                                required
-                            />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Start Date</label>
+                            <div className="relative">
+                                <CalendarIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    type="date"
+                                    className="pl-10"
+                                    value={startDate}
+                                    onChange={(e) => setStartDate(e.target.value)}
+                                    min={format(new Date(), 'yyyy-MM-dd')}
+                                    required
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">End Date</label>
+                            <div className="relative">
+                                <CalendarIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    type="date"
+                                    className="pl-10"
+                                    value={endDate}
+                                    onChange={(e) => setEndDate(e.target.value)}
+                                    min={startDate}
+                                    required
+                                />
+                            </div>
                         </div>
                     </div>
                     <div className="space-y-2">
