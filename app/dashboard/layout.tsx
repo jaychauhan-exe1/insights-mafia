@@ -59,7 +59,9 @@ export default async function DashboardLayout({
             {/* Sidebar Desktop */}
             <aside className="hidden lg:flex w-[260px] fixed inset-y-0 bg-white border-r border-border flex-col z-50">
                 <div className="p-6 mb-2 flex items-center gap-3">
-                    <Image src="/assets/logo.png" alt="Logo" width={500} height={40} className=" w-2/3 h-full" />
+                    <Link href="/dashboard">
+                        <Image src="/assets/logo.png" alt="Logo" width={500} height={40} className="w-2/3 h-full" />
+                    </Link>
                 </div>
 
                 <nav className="flex-1 px-3 overflow-y-auto">
@@ -81,22 +83,26 @@ export default async function DashboardLayout({
                 {/* Navbar */}
                 <header className="h-[70px] px-6 lg:px-8 flex items-center justify-between sticky top-0 bg-background/80 backdrop-blur-md z-40 border-b border-border/50">
                     <div className="flex items-center gap-4 lg:hidden">
-                        <Image src="/assets/logo.png" alt="Logo" width={300} height={16} className="w-1/3 h-full" />
+                        <Link href="/dashboard">
+                            <Image src="/assets/logo.png" alt="Logo" width={300} height={16} className="w-1/3 h-full" />
+                        </Link>
                     </div>
 
                     <div className="flex-1" />
 
                     <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-3 p-1.5 lg:pr-4 rounded-full bg-white border border-border shadow-sm hover:border-primary/20 transition-all duration-300">
-                            <div className="h-8 w-8 rounded-full bg-muted border border-white shadow-sm overflow-hidden flex items-center justify-center font-bold text-muted-foreground">
-                                {profile.avatar_url ? (
-                                    <Image src={profile.avatar_url} alt={profile.name} width={32} height={32} className="object-cover" />
-                                ) : (
-                                    profile.name.charAt(0)
-                                )}
+                        <Link href="/dashboard/account">
+                            <div className="flex items-center gap-3 p-1.5 lg:pr-4 rounded-full bg-white border border-border shadow-sm hover:border-primary/20 transition-all duration-300">
+                                <div className="h-8 w-8 rounded-full bg-muted border border-white shadow-sm overflow-hidden flex items-center justify-center font-bold text-muted-foreground">
+                                    {profile.avatar_url ? (
+                                        <Image src={profile.avatar_url} alt={profile.name} width={32} height={32} className="object-cover" />
+                                    ) : (
+                                        profile.name.charAt(0)
+                                    )}
+                                </div>
+                                <span className="hidden sm:inline font-bold text-sm text-foreground">{profile.name}</span>
                             </div>
-                            <span className="hidden sm:inline font-bold text-sm text-foreground">{profile.name}</span>
-                        </div>
+                        </Link>
                     </div>
                 </header>
 

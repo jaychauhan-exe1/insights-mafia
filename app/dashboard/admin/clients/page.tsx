@@ -10,9 +10,9 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Briefcase, Eye, Trash2, IndianRupee, Link as LinkIcon, Banknote } from 'lucide-react';
+import { Briefcase, Eye, IndianRupee, Link as LinkIcon, Banknote } from 'lucide-react';
 import Link from 'next/link';
-import { deleteClient } from './actions';
+import { DeleteClientButton } from './delete-client-button';
 import { EditClientDialog } from './edit-client-dialog';
 
 export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
@@ -146,14 +146,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                                                     <Eye className="w-4 h-4" />
                                                 </Button>
                                             </Link>
-                                            <form action={async () => {
-                                                'use server';
-                                                await deleteClient(client.id);
-                                            }}>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 transition-all duration-300">
-                                                    <Trash2 className="w-4 h-4" />
-                                                </Button>
-                                            </form>
+                                            <DeleteClientButton clientId={client.id} clientName={client.name} />
                                         </div>
                                     </TableCell>
                                 </TableRow>
@@ -178,14 +171,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                                 </div>
                                 <div className="flex items-center gap-1">
                                     <EditClientDialog client={client} />
-                                    <form action={async () => {
-                                        'use server';
-                                        await deleteClient(client.id);
-                                    }}>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground hover:text-red-500 transition-colors">
-                                            <Trash2 className="w-4 h-4" />
-                                        </Button>
-                                    </form>
+                                    <DeleteClientButton clientId={client.id} clientName={client.name} />
                                 </div>
                             </div>
 

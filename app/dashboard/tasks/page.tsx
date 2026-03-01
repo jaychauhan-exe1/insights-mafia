@@ -11,8 +11,8 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { deleteTask } from './actions';
-import { ClipboardList, MessageSquare, CheckCircle2, IndianRupee, Trash2, Eye } from 'lucide-react';
+import { DeleteTaskButton } from './delete-task-button';
+import { ClipboardList, MessageSquare, CheckCircle2, IndianRupee, Eye } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { ReviewTaskDialog } from './review-task-dialog';
 import { EditTaskDialog } from './edit-task-dialog';
@@ -239,14 +239,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
                                             )}
 
                                             {profile.role === 'Admin' && (
-                                                <form action={async () => {
-                                                    'use server';
-                                                    await deleteTask(task.id);
-                                                }}>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 transition-all duration-300">
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </Button>
-                                                </form>
+                                                <DeleteTaskButton taskId={task.id} taskTitle={task.title} size="icon" />
                                             )}
 
                                         </div>
@@ -323,14 +316,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
                                     <EditTaskDialog task={task} users={users || []} clients={clients || []} />
                                 )}
                                 {profile.role === 'Admin' && (
-                                    <form action={async () => {
-                                        'use server';
-                                        await deleteTask(task.id);
-                                    }}>
-                                        <Button size="sm" variant="ghost" className="h-8 w-8 rounded-lg hover:bg-red-50 text-red-500 p-0">
-                                            <Trash2 className="w-4 h-4" />
-                                        </Button>
-                                    </form>
+                                    <DeleteTaskButton taskId={task.id} taskTitle={task.title} size="sm" />
                                 )}
                             </div>
                         </div>

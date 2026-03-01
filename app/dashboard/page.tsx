@@ -43,6 +43,12 @@ export default async function DashboardPage() {
     const monthStart = startOfMonth(new Date(todayStr));
     const monthStartStr = monthStart.toISOString().split("T")[0];
 
+    // Compute upcoming 2-day window for leave notices (in IST)
+    const todayDate = new Date(todayStr);
+    const twoDaysLater = new Date(todayDate);
+    twoDaysLater.setDate(todayDate.getDate() + 2);
+    const twoDaysLaterStr = twoDaysLater.toISOString().split("T")[0];
+
     // Fetch necessary data
     const [
         tasksRes,
@@ -56,6 +62,7 @@ export default async function DashboardPage() {
         allLeaveRequestsRes,
         firstAttendancesRes,
         approvalItemsRes,
+        upcomingLeavesRes,
     ] = await Promise.all([
         supabase
             .from("tasks")
@@ -182,6 +189,17 @@ export default async function DashboardPage() {
                     .limit(3),
             ])
             : Promise.resolve([[], []] as any),
+
+        // Upcoming leave notices for Admin: leaves in next 2 days (today → today+2)
+        profile.role === "Admin"
+            ? supabase
+                .from("leave_requests")
+                .select("*, user:profiles(name, avatar_url)")
+                .gte("date", todayStr)
+                .lte("date", twoDaysLaterStr)
+                .in("status", ["Approved", "Rejected"])
+                .order("date", { ascending: true })
+            : Promise.resolve({ data: [] }),
     ]);
 
     const newTasksCount = tasksRes?.count || 0;
@@ -189,6 +207,24 @@ export default async function DashboardPage() {
     const firstAttendances = firstAttendancesRes?.data || [];
     const attendanceRecords = attendanceRes?.data || [];
     const isCheckedInToday = attendanceRecords.some((r: any) => r.date === todayStr);
+
+    // Build upcoming leave notice list for Admin
+    const upcomingLeaveNotices: { id: string; name: string; date: string; status: string; daysUntil: number }[] = [];
+    if (profile.role === "Admin") {
+        const rawUpcoming = (upcomingLeavesRes as any)?.data || [];
+        rawUpcoming.forEach((leave: any) => {
+            const leaveDate = new Date(leave.date);
+            const diffMs = leaveDate.getTime() - todayDate.getTime();
+            const daysUntil = Math.round(diffMs / (1000 * 60 * 60 * 24));
+            upcomingLeaveNotices.push({
+                id: leave.id,
+                name: leave.user?.name || "Someone",
+                date: leave.date,
+                status: leave.status,
+                daysUntil,
+            });
+        });
+    }
 
     let activityDates: string[] = attendanceRecords.map((d: any) => d.date);
     if (profile.role === "Admin" && adminActivityRes) {
@@ -431,6 +467,53 @@ export default async function DashboardPage() {
                         </DismissableNotice>
                     )}
 
+                    {/* Upcoming Leave Notices — non-closeable, admin only */}
+                    {profile.role === "Admin" && upcomingLeaveNotices.map((notice) => {
+                        const leaveDay = new Date(notice.date);
+                        const dayLabel = leaveDay.toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "long",
+                            timeZone: "Asia/Kolkata",
+                        });
+                        const isApproved = notice.status === "Approved";
+                        const whenLabel =
+                            notice.daysUntil === 0
+                                ? "today"
+                                : notice.daysUntil === 1
+                                    ? "tomorrow"
+                                    : `on ${dayLabel}`;
+                        return (
+                            <div
+                                key={notice.id}
+                                className="bg-primary/5 border border-primary/20 shadow-sm rounded-xl p-6 flex flex-col sm:flex-row items-center justify-between gap-6 min-h-[100px]"
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                                        <CalendarIcon className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-foreground">
+                                            {isApproved ? "Upcoming Leave" : "Unresolved Leave Request"}
+                                        </h3>
+                                        <p className="text-sm text-muted-foreground font-medium">
+                                            {isApproved
+                                                ? <><span className="font-bold text-foreground">{notice.name}</span> is going on leave {whenLabel} ({dayLabel}).</>
+                                                : <><span className="font-bold text-foreground">{notice.name}</span> might go on leave {whenLabel} ({dayLabel}) — request was not approved.</>}
+                                        </p>
+                                    </div>
+                                </div>
+                                <span
+                                    className={`text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest whitespace-nowrap shrink-0 ${isApproved
+                                            ? "bg-primary/10 text-primary"
+                                            : "bg-orange-50 text-orange-600 border border-orange-200"
+                                        }`}
+                                >
+                                    {isApproved ? "Approved Leave" : "Rejected"}
+                                </span>
+                            </div>
+                        );
+                    })}
+
                     {profile.role === "Employee" && (
                         <div className="space-y-4">
                             {leaveRequests
@@ -512,12 +595,12 @@ export default async function DashboardPage() {
                                     <div className="flex items-center justify-between">
                                         <span
                                             className={`text-[10px] font-bold px-2.5 py-1 rounded-md uppercase tracking-wider ${task.status === "Completed"
-                                                    ? "bg-emerald-50 text-emerald-600"
-                                                    : task.status === "Review"
-                                                        ? "bg-indigo-50 text-indigo-600"
-                                                        : task.status === "Revision"
-                                                            ? "bg-orange-50 text-orange-600"
-                                                            : "bg-muted text-muted-foreground"
+                                                ? "bg-emerald-50 text-emerald-600"
+                                                : task.status === "Review"
+                                                    ? "bg-indigo-50 text-indigo-600"
+                                                    : task.status === "Revision"
+                                                        ? "bg-orange-50 text-orange-600"
+                                                        : "bg-muted text-muted-foreground"
                                                 }`}
                                         >
                                             {task.status}

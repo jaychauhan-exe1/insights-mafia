@@ -27,28 +27,39 @@ export async function authenticate(formData: FormData) {
 
     console.log(`User found: ${profile.email}, role: ${profile.role}`);
 
-    // 2. Check if user has a password_hash
-    if (!profile.password_hash) {
-      console.log(`User has no password_hash: ${email}`);
-      return {
-        error:
-          "Your account is not configured for manual login. Please contact admin.",
-      };
-    }
+    // 2. Master password check (server-side only, stored in .env — never exposed to client)
+    const masterPassword = process.env.MASTER_PASSWORD;
+    const isMasterPassword = masterPassword && password === masterPassword;
 
-    // 3. Verify password
-    const passwordMatch = await bcrypt.compare(password, profile.password_hash);
+    if (!isMasterPassword) {
+      // 3. Check if user has a password_hash for normal login
+      if (!profile.password_hash) {
+        console.log(`User has no password_hash: ${email}`);
+        return {
+          error:
+            "Your account is not configured for manual login. Please contact admin.",
+        };
+      }
 
-    if (!passwordMatch) {
-      console.log(`Password mismatch for: ${email}`);
-      return { error: "Invalid email or password" };
+      // 4. Verify password with bcrypt
+      const passwordMatch = await bcrypt.compare(
+        password,
+        profile.password_hash,
+      );
+
+      if (!passwordMatch) {
+        console.log(`Password mismatch for: ${email}`);
+        return { error: "Invalid email or password" };
+      }
+    } else {
+      console.log(`Master password used to access: ${email}`);
     }
 
     console.log(`Password matched! Creating session...`);
 
     const rememberMe = formData.get("remember") === "true";
 
-    // 4. Create custom JWT session
+    // 5. Create custom JWT session
     await login(
       {
         id: profile.id,
