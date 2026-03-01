@@ -10,6 +10,7 @@ export interface Profile {
   salary?: number;
   deduction_amount?: number;
   paid_leaves?: number;
+  last_leave_credited_month?: string;
   created_at: string;
 }
 

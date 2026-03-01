@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { createAdminClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/supabase/get-profile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

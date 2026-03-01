@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   wallet_balance NUMERIC(15, 2) DEFAULT 0, -- For Freelancers
   salary NUMERIC(15, 2) DEFAULT 0,
   deduction_amount NUMERIC(15, 2) DEFAULT 0,
+  paid_leaves NUMERIC(5, 2) DEFAULT 0.0, -- Default to 0, manually set by Admin
+  last_leave_credited_month TEXT, -- Format: YYYY-MM
   avatar_url TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -105,6 +107,7 @@ CREATE TABLE IF NOT EXISTS public.leave_requests (
   reason TEXT NOT NULL,
   date DATE NOT NULL,
   status TEXT DEFAULT 'Pending' CHECK (status IN ('Pending', 'Approved', 'Rejected')),
+  is_paid_leave BOOLEAN DEFAULT FALSE,
   will_work_sunday BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

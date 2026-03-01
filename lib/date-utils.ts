@@ -85,3 +85,11 @@ export const getISTHours = (date: Date = new Date()) => {
   const { hour } = getISTParts(date);
   return parseInt(hour);
 };
+
+/**
+ * Get current year and month in IST (YYYY-MM)
+ */
+export const getISTMonthKey = (date: Date = new Date()) => {
+  const { year, month } = getISTParts(date);
+  return `${year}-${month}`;
+};

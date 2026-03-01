@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ReviewTaskDialog } from '@/app/dashboard/tasks/review-task-dialog';
 import { approveLeaveRequest, rejectLeaveRequest } from './actions';
+import { ApprovalActions } from './approval-actions';
 
 export default async function ApprovalsPage() {
     const profile = await getProfile();
@@ -189,18 +190,12 @@ export default async function ApprovalsPage() {
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-right px-6">
-                                                <div className="flex justify-end gap-2">
-                                                    <form action={async () => { await approveLeaveRequest(request.id); }}>
-                                                        <Button size="sm" className="h-8 px-4 bg-primary hover:bg-primary/90 text-white rounded-lg font-bold text-[9px] uppercase tracking-widest transition-all duration-300">
-                                                            Approve
-                                                        </Button>
-                                                    </form>
-                                                    <form action={async () => { await rejectLeaveRequest(request.id); }}>
-                                                        <Button size="sm" variant="outline" className="h-8 px-4 text-red-500 hover:text-red-600 border-red-200 hover:border-red-300 hover:bg-red-50 rounded-lg font-bold text-[9px] uppercase tracking-widest transition-all duration-300">
-                                                            Reject
-                                                        </Button>
-                                                    </form>
-                                                </div>
+                                                <ApprovalActions
+                                                    requestId={request.id}
+                                                    hasPaidBalance={parseFloat(String(request.user?.paid_leaves || '0')) >= 1}
+                                                    requestedAsPaid={request.is_paid_leave}
+                                                    paidLeavesLeft={parseFloat(String(request.user?.paid_leaves || '0'))}
+                                                />
                                             </TableCell>
                                         </TableRow>
                                     ))}
@@ -245,17 +240,13 @@ export default async function ApprovalsPage() {
                             <div className="bg-muted/30 p-3 rounded-xl">
                                 <p className="text-[11px] text-muted-foreground italic leading-relaxed">"{request.reason}"</p>
                             </div>
-                            <div className="flex gap-2 pt-2">
-                                <form className="flex-1" action={async () => { await approveLeaveRequest(request.id); }}>
-                                    <Button className="w-full h-10 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/10">
-                                        Approve
-                                    </Button>
-                                </form>
-                                <form className="flex-1" action={async () => { await rejectLeaveRequest(request.id); }}>
-                                    <Button variant="outline" className="w-full h-10 text-red-500 border-red-100 hover:bg-red-50 rounded-xl font-bold text-[10px] uppercase tracking-widest">
-                                        Reject
-                                    </Button>
-                                </form>
+                            <div className="pt-2">
+                                <ApprovalActions
+                                    requestId={request.id}
+                                    hasPaidBalance={parseFloat(String(request.user?.paid_leaves || '0')) >= 1}
+                                    requestedAsPaid={request.is_paid_leave}
+                                    paidLeavesLeft={parseFloat(String(request.user?.paid_leaves || '0'))}
+                                />
                             </div>
                         </Card>
                     ))}

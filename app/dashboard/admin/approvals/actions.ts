@@ -3,10 +3,13 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
-export async function approveLeaveRequest(requestId: string) {
+export async function approveLeaveRequest(
+  requestId: string,
+  isPaidOverride: boolean = false,
+) {
   const supabase = await createAdminClient();
 
-  // 1. Fetch request details
+  // 1. Fetch request details with user profile
   const { data: request, error: fetchError } = await supabase
     .from("leave_requests")
     .select("*, user:profiles(*)")
@@ -15,24 +18,32 @@ export async function approveLeaveRequest(requestId: string) {
 
   if (fetchError || !request) return { error: "Request not found" };
 
-  // 2. Update status
+  // 2. Validate Paid Leave Balance if override is on
+  const currentPaidLeaves = parseFloat(
+    String(request.user?.paid_leaves || "0"),
+  );
+  const canBePaid = isPaidOverride && currentPaidLeaves >= 1;
+
+  // 3. Update status
   const { error: updateError } = await supabase
     .from("leave_requests")
-    .update({ status: "Approved" })
+    .update({
+      status: "Approved",
+      is_paid_leave: canBePaid, // Sync the table with what admin decided
+    })
     .eq("id", requestId);
 
   if (updateError) return { error: updateError.message };
 
-  // 3. Create attendance record
+  // 4. Create attendance record
   await supabase.from("attendance").insert({
     user_id: request.user_id,
     date: request.date,
-    status: request.is_paid_leave ? "Paid Off" : "Off",
+    status: canBePaid ? "Paid Off" : "Off",
   });
 
-  // 4. If paid leave, deduct from profile
-  if (request.is_paid_leave) {
-    const currentPaidLeaves = request.user?.paid_leaves || 0;
+  // 5. If confirmed paid, deduct from profile
+  if (canBePaid) {
     await supabase
       .from("profiles")
       .update({ paid_leaves: Math.max(0, currentPaidLeaves - 1) })

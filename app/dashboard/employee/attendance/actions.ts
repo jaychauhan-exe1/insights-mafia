@@ -8,6 +8,7 @@ import {
   getISTToday,
   getISTHours,
   getISTParts,
+  getISTMonthKey,
 } from "@/lib/date-utils";
 
 const isWithinCheckInHours = () => {
@@ -46,6 +47,20 @@ export async function checkIn(
 
   const supabase = await createAdminClient();
   const today = getISTToday();
+  const currentMonth = getISTMonthKey();
+
+  // Monthly Leave Credit Logic:
+  // If it's a new month, credit 1.0 paid leave to the employee
+  if (profile.last_leave_credited_month !== currentMonth) {
+    const currentPaidBalance = parseFloat(String(profile.paid_leaves || "0"));
+    await supabase
+      .from("profiles")
+      .update({
+        paid_leaves: currentPaidBalance + 1.0,
+        last_leave_credited_month: currentMonth,
+      })
+      .eq("id", profile.id);
+  }
 
   const { error } = await supabase.from("attendance").insert({
     user_id: profile.id,

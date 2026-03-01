@@ -49,20 +49,18 @@ export function calculateSalary(
     const dayStr = format(day, "yyyy-MM-dd");
     const status = attendanceMap.get(dayStr);
 
-    // If marked Present, Paid Off, or Half Day, it's not a full absence
-    if (
-      status === "Present" ||
-      status === "Paid Off" ||
-      status === "Off" ||
-      status === "Half Day"
-    ) {
-      if (status === "Half Day") {
-        absencesCount += 0.5;
-      }
+    // Absence calculation logic:
+    // 0 absence: Present, Paid Off
+    // 0.5 absence: Half Day
+    // 1.0 absence: Absent, Off (unpaid), or no record
+    if (status === "Present" || status === "Paid Off") {
+      return;
+    } else if (status === "Half Day") {
+      absencesCount += 0.5;
       return;
     }
 
-    // Default: Absent if no record or explicitly absent
+    // Default: Absent (1.0 deduction)
     absencesCount++;
   });
 

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 
 import { createAdminClient } from '@/lib/supabase/server';
 import { getProfile } from '@/lib/supabase/get-profile';
@@ -5,10 +6,11 @@ import { notFound, redirect } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Mail, Briefcase, Calendar, Clock, DollarSign, Wallet, FileText, CheckCircle2, Plane } from 'lucide-react';
+import { ArrowLeft, Mail, Briefcase, Calendar, Clock, DollarSign, Wallet, FileText, CheckCircle2, Plane, Settings2 } from 'lucide-react';
+import { revalidatePath } from 'next/cache';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { formatIST, formatISTTime } from '@/lib/date-utils';
+import { formatIST, formatISTTime, getISTToday } from '@/lib/date-utils';
 
 export default async function UserDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id: userId } = await params;
@@ -63,6 +65,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
     const confirmedAbsences = attendance?.filter(a => a.status === 'Absent').length || 0;
     const approvedLeaves = leaves?.filter(l => l.status === 'Approved').length || 0;
 
+
     return (
         <div className="space-y-8 pb-10">
             <header className="flex flex-col gap-4">
@@ -103,23 +106,26 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
 
                 {/* Today's Status Alert */}
                 {(user.role === 'Employee' || user.role === 'Freelancer') && (
-                    <Card className="border-none shadow-sm bg-amber-50/30 overflow-hidden relative">
-                        <div className="absolute top-0 left-0 w-1 h-full bg-amber-400" />
+                    <Card className="border-none shadow-sm bg-primary/5 overflow-hidden relative">
+                        <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
                         <CardContent className="p-4 flex items-center justify-between">
                             <div className="flex items-center gap-4">
-                                <div className="p-2 bg-amber-100 rounded-lg">
-                                    <Clock className="w-4 h-4 text-amber-600" />
+                                <div className="p-2 bg-primary/10 rounded-lg">
+                                    <Clock className="w-4 h-4 text-primary" />
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest leading-none mb-1">Live Attendance Status</p>
-                                    <p className="text-sm font-bold text-amber-900">
-                                        {attendance?.[0]?.date === formatIST(new Date()).split(',')[0] ? (
-                                            attendance[0].check_out ? "Shift Completed for today" : "Currently on Duty"
+                                    <p className="text-[10px] font-bold text-primary uppercase tracking-widest leading-none mb-1">Live Attendance Status</p>
+                                    <p className="text-sm font-bold text-foreground">
+                                        {attendance?.[0]?.date === getISTToday() ? (
+                                            attendance[0].check_out ? "Shift Completed for today" :
+                                                (attendance[0].status === "Paid Off" || attendance[0].status === "Off") ? "On Leave Today" :
+                                                    (attendance[0].status === "Half Day") ? "On Half-Day Leave" :
+                                                        "Currently on Duty"
                                         ) : "Shift not started yet"}
                                     </p>
                                 </div>
                             </div>
-                            {attendance?.[0] && !attendance[0].check_out && attendance[0].date < formatIST(new Date()).split(',')[0] && (
+                            {attendance?.[0] && !attendance[0].check_out && attendance[0].date < getISTToday() && (
                                 <Badge className="bg-red-500 text-white border-none animate-pulse">MISSED CHECKOUT</Badge>
                             )}
                         </CardContent>
@@ -186,6 +192,21 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
                             </div>
                             <div className="p-2 bg-white rounded-lg shadow-sm border border-red-100">
                                 <Clock className="w-4 h-4 text-red-400" />
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Paid Leaves Balance Card */}
+                <Card className="border-none shadow-sm bg-primary/5">
+                    <CardContent className="p-6">
+                        <div className="flex items-start justify-between">
+                            <div>
+                                <p className="text-[10px] font-bold text-primary uppercase tracking-[0.15em] mb-1">Paid Leaves Left</p>
+                                <h3 className="text-2xl font-black text-foreground leading-none">{parseFloat(String(user.paid_leaves || '0'))}</h3>
+                            </div>
+                            <div className="p-2 bg-white rounded-lg shadow-sm border border-primary/10">
+                                <Plane className="w-4 h-4 text-primary" />
                             </div>
                         </div>
                     </CardContent>
@@ -315,14 +336,17 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
                             </div>
                             <div className="space-y-1">
                                 <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Late Deduction</p>
-                                <p className="text-sm font-black text-red-500">₹{user.deduction_amount || 0} / incident</p>
+                                <p className="text-sm font-black text-red-500">₹{user.deduction_amount || 0} / absent</p>
                             </div>
-                            <div className="pt-4 border-t border-dashed border-border flex justify-between items-center">
-                                <div className="space-y-1">
-                                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Paid Leaves</p>
-                                    <p className="text-sm font-black text-emerald-600">{user.paid_leaves || 1} Remaining</p>
+                            <div className="pt-4 border-t border-dashed border-border space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <div className="space-y-1">
+                                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Available Balance</p>
+                                        <p className="text-sm font-black text-emerald-600">{parseFloat(String(user.paid_leaves || '0'))} Paid Leaves</p>
+                                    </div>
+                                    <Plane className="w-8 h-8 text-primary/10 -rotate-12" />
                                 </div>
-                                <Plane className="w-8 h-8 text-primary/10 -rotate-12" />
+
                             </div>
                         </CardContent>
                     </Card>

@@ -53,7 +53,12 @@ export function LeaveRequestModal() {
                 dates.push(startDate);
             }
 
-            const res = await submitLeaveRequest({ dates, reason, will_work_sunday: willWorkSunday, is_paid_leave: isPaidLeave });
+            const res = await submitLeaveRequest({
+                dates,
+                reason,
+                will_work_sunday: willWorkSunday,
+                is_paid_leave: isPaidLeave
+            });
             if (res.error) toast.error(res.error);
             else {
                 toast.success(`Leave request submitted for ${dates.length} day${dates.length > 1 ? 's' : ''}`);
@@ -94,7 +99,10 @@ export function LeaveRequestModal() {
                             </label>
                             <p className="text-[9px] text-muted-foreground font-bold">Select a range of dates</p>
                         </div>
-                        <Switch checked={isMultiDay} onCheckedChange={setIsMultiDay} />
+                        <Switch
+                            checked={isMultiDay}
+                            onCheckedChange={setIsMultiDay}
+                        />
                     </div>
 
                     <div className={cn("grid gap-4", isMultiDay ? "grid-cols-2" : "grid-cols-1")}>
