@@ -11,7 +11,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { AttendanceCalendar } from "@/components/attendance-calendar";
+import { AdminAttendanceCalendar } from "./admin-attendance-calendar";
 import { Clock, History, Users, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -72,6 +72,11 @@ export default async function AdminAttendancePage({
         .order("date", { ascending: false })
         .order("check_in", { ascending: false, nullsFirst: false })
         .range(start, end);
+
+    const { data: holidays } = await supabase
+        .from('holidays')
+        .select('*')
+        .order('date', { ascending: true });
 
     const isAfterCheckoutWindow = (recordDate: string) => {
         const todayStr = getISTToday();
@@ -163,7 +168,7 @@ export default async function AdminAttendancePage({
             <div className="grid lg:grid-cols-12 gap-8">
                 {/* Calendar View */}
                 <div className="lg:col-span-8">
-                    <AttendanceCalendar records={(allRecords as any) || []} />
+                    <AdminAttendanceCalendar records={(allRecords as any) || []} holidays={holidays || []} />
                 </div>
 
                 {/* Sidebar: Absent List */}

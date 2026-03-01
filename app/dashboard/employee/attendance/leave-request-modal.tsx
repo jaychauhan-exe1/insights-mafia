@@ -82,7 +82,7 @@ export function LeaveRequestModal() {
                     <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground group-hover:text-primary">Request Leave</span>
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[425px] max-h-[75vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="text-xl font-bold flex items-center gap-2">
                         <Plane className="w-5 h-5 text-primary" />

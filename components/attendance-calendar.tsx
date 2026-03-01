@@ -40,7 +40,7 @@ interface AttendanceRecord {
     date: string;
     check_in?: string | null;
     check_out?: string | null;
-    status: 'Present' | 'Absent' | 'Off' | 'Paid Off' | 'Half Day';
+    status: 'Present' | 'Absent' | 'Paid Off' | 'Half Day' | 'Holiday';
     check_in_location?: { latitude: number; longitude: number } | null;
     check_out_location?: { latitude: number; longitude: number } | null;
     user?: {
@@ -50,9 +50,15 @@ interface AttendanceRecord {
     };
 }
 
+interface Holiday {
+    id: string;
+    date: string;
+    label: string;
+}
+
 import { formatISTTime, getISTToday } from '@/lib/date-utils';
 
-export function AttendanceCalendar({ records, joiningDate }: { records: AttendanceRecord[], joiningDate?: string }) {
+export function AttendanceCalendar({ records, holidays = [], joiningDate }: { records: AttendanceRecord[], holidays?: Holiday[], joiningDate?: string }) {
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
@@ -79,6 +85,11 @@ export function AttendanceCalendar({ records, joiningDate }: { records: Attendan
             }
             return r;
         }).filter(r => r.date === dateStr);
+    };
+
+    const getHolidayForDay = (day: Date) => {
+        const dateStr = format(day, 'yyyy-MM-dd');
+        return holidays.find(h => h.date === dateStr);
     };
 
     const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
@@ -121,11 +132,13 @@ export function AttendanceCalendar({ records, joiningDate }: { records: Attendan
                             const isPastDay = day < istTodayValue && !isSameDay(day, istTodayValue);
                             const isWeekday = day.getDay() !== 0 && day.getDay() !== 6;
 
-                            let mainStatus = dayRecords.length > 0 ? (
+                            const holiday = getHolidayForDay(day);
+
+                            let mainStatus = holiday ? 'Holiday' : (dayRecords.length > 0 ? (
                                 dayRecords.some(r => r.status === 'Present') ? 'Present' :
                                     dayRecords.some(r => r.status === 'Half Day') ? 'Half Day' :
                                         dayRecords[0].status
-                            ) : null;
+                            ) : null);
 
                             const joiningDateObj = joiningDate ? parseISO(joiningDate) : null;
                             const isBeforeJoining = joiningDateObj && day < joiningDateObj && !isSameDay(day, joiningDateObj);
@@ -148,10 +161,11 @@ export function AttendanceCalendar({ records, joiningDate }: { records: Attendan
                                     {mainStatus && (
                                         <Badge className={`border-none text-[8px] font-bold h-4 px-1.5 leading-none uppercase tracking-tighter shadow-none ${mainStatus === 'Present' ? 'bg-emerald-500/10 text-emerald-600' :
                                             mainStatus === 'Half Day' ? 'bg-amber-500/10 text-amber-600' :
-                                                mainStatus === 'Off' || mainStatus === 'Paid Off' ? 'bg-blue-500/10 text-blue-600' :
-                                                    'bg-red-500/10 text-red-600'
+                                                mainStatus === 'Paid Off' ? 'bg-blue-500/10 text-blue-600' :
+                                                    mainStatus === 'Holiday' ? 'bg-purple-500/10 text-purple-600' :
+                                                        'bg-red-500/10 text-red-600'
                                             }`}>
-                                            {dayRecords.length > 1 ? `${dayRecords.length} Records` : mainStatus}
+                                            {mainStatus === 'Holiday' ? holiday?.label : (dayRecords.length > 1 ? `${dayRecords.length} Records` : mainStatus)}
                                         </Badge>
                                     )}
                                 </div>
@@ -174,18 +188,18 @@ export function AttendanceCalendar({ records, joiningDate }: { records: Attendan
                         </div>
                         <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
-                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Off</span>
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Paid Off</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-emerald-700 shadow-[0_0_8px_rgba(4,120,87,0.4)]" />
-                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Paid Off</span>
+                            <div className="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.4)]" />
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Holiday</span>
                         </div>
                     </div>
                 </CardContent>
             </Card>
 
             <Dialog open={!!selectedDate} onOpenChange={(open) => !open && setSelectedDate(null)}>
-                <DialogContent className="md:max-w-3xl lg:w-6xl max-h-[80vh] overflow-y-auto">
+                <DialogContent className="md:max-w-3xl lg:w-6xl max-h-[75vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="text-xl font-bold flex items-center gap-2">
                             <CalendarIcon className="w-5 h-5 text-primary" />
@@ -223,8 +237,9 @@ export function AttendanceCalendar({ records, joiningDate }: { records: Attendan
                                                 <TableCell className="text-center">
                                                     <Badge className={`border-none text-[8px] font-bold h-4 px-1.5 uppercase ${record.status === 'Present' ? 'bg-emerald-50 text-emerald-500' :
                                                         record.status === 'Half Day' ? 'bg-amber-50 text-amber-500' :
-                                                            record.status === 'Off' || record.status === 'Paid Off' ? 'bg-blue-50 text-blue-500' :
-                                                                'bg-red-50 text-red-500'
+                                                            record.status === 'Paid Off' ? 'bg-blue-50 text-blue-500' :
+                                                                record.status === 'Holiday' ? 'bg-purple-50 text-purple-500' :
+                                                                    'bg-red-50 text-red-500'
                                                         }`}>
                                                         {record.status}
                                                     </Badge>

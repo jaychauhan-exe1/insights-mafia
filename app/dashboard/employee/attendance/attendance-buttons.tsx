@@ -20,7 +20,7 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover";
 
-export function AttendanceButtons({ isCheckedIn, clients }: { isCheckedIn: boolean; clients: string[] }) {
+export function AttendanceButtons({ isCheckedIn, clients, isDisabled = false }: { isCheckedIn: boolean; clients: string[]; isDisabled?: boolean }) {
     const [isLoading, setIsLoading] = useState(false);
     const [open, setOpen] = useState(false);
     const [selectedWorkplace, setSelectedWorkplace] = useState("");
@@ -162,7 +162,7 @@ export function AttendanceButtons({ isCheckedIn, clients }: { isCheckedIn: boole
                     <div className="flex flex-col items-center gap-3">
                         <Button
                             onClick={handleAction}
-                            disabled={isLoading || !selectedWorkplace}
+                            disabled={isLoading || !selectedWorkplace || isDisabled}
                             className="w-28 h-28 rounded-xl bg-white hover:bg-white/90 text-indigo-600 transition-colors cursor-pointer duration-300 shadow-2xl shadow-indigo-500/40 border-none group relative overflow-hidden active:scale-95 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
                         >
                             <div className="absolute inset-0 bg-white/5" />
@@ -170,7 +170,9 @@ export function AttendanceButtons({ isCheckedIn, clients }: { isCheckedIn: boole
                                 {isLoading ? <Loader2 className="w-10 h-10 animate-spin" /> : <LogIn className="w-10 h-10" />}
                             </div>
                         </Button>
-                        <span className="text-[10px] font-extrabold text-white uppercase tracking-widest">Clock In</span>
+                        <span className="text-[10px] font-extrabold text-white uppercase tracking-widest">
+                            {isDisabled ? "Check-in starts at 10:00 AM" : "Clock In"}
+                        </span>
                     </div>
                 )}
             </div>

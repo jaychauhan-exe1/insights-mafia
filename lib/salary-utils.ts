@@ -2,13 +2,11 @@ import {
   startOfMonth,
   endOfMonth,
   eachDayOfInterval,
-  isSameDay,
-  isSunday,
   isAfter,
   parseISO,
   format,
+  getDay,
 } from "date-fns";
-import { getISTToday } from "./date-utils";
 
 export function calculateSalary(
   baseSalary: number,
@@ -19,63 +17,107 @@ export function calculateSalary(
     status: string;
     will_work_sunday: boolean;
   }[] = [],
-  joiningDate?: string, // New parameter for first ever check-in date
+  joiningDate?: string,
+  targetMonth?: string,
 ) {
-  // Use IST for "now" and "today"
-  const todayStr = getISTToday();
-  const today = parseISO(todayStr);
-  const monthStart = startOfMonth(today);
-  const monthEnd = endOfMonth(today);
+  const now = new Date();
+  const referenceDate = targetMonth ? parseISO(`${targetMonth}-01`) : now;
 
-  // If joiningDate is provided, start from that date if it's within the current month
+  const monthStart = startOfMonth(referenceDate);
+  const monthEnd = endOfMonth(referenceDate);
+
+  const isCurrentMonth =
+    format(monthStart, "yyyy-MM") === format(now, "yyyy-MM");
+  const effectiveEnd =
+    isCurrentMonth && isAfter(monthEnd, now) ? now : monthEnd;
+
   const effectiveStart = joiningDate
     ? parseISO(joiningDate) > monthStart
       ? parseISO(joiningDate)
       : monthStart
     : monthStart;
 
-  // Working days are EVERY day up to today
   const allDaysSoFar = eachDayOfInterval({
     start: effectiveStart,
-    end: isAfter(monthEnd, today) ? today : monthEnd,
+    end: isAfter(effectiveEnd, effectiveStart) ? effectiveEnd : effectiveStart,
   });
 
-  let absencesCount = 0;
   const attendanceMap = new Map(
     attendanceRecords.map((r) => [r.date, r.status]),
   );
 
+  let absencesCount = 0;
+  let halfDaysCount = 0;
+  let paidLeavesUsed = 0;
+  const monthlyAllowance = 1; // Each month has exactly 1 paid leave
+  const todayStr = format(now, "yyyy-MM-dd");
+
   allDaysSoFar.forEach((day) => {
     const dayStr = format(day, "yyyy-MM-dd");
+    const isToday = dayStr === todayStr;
     const status = attendanceMap.get(dayStr);
 
-    // Absence calculation logic:
-    // 0 absence: Present, Paid Off
-    // 0.5 absence: Half Day
-    // 1.0 absence: Absent, Off (unpaid), or no record
-    if (status === "Present" || status === "Paid Off") {
-      return;
-    } else if (status === "Half Day") {
-      absencesCount += 0.5;
+    if (status === "Present" || status === "Holiday") {
       return;
     }
 
-    // Default: Absent (1.0 deduction)
+    if (status === "Paid Off") {
+      paidLeavesUsed++;
+      return;
+    }
+
+    if (status === "Half Day") {
+      halfDaysCount++;
+      return;
+    }
+
+    // Skip Sundays unless there is an override status (like Holiday or Present)
+    if (getDay(day) === 0 && !status) {
+      return;
+    }
+
+    // Skip Today if there is no record yet (assume they haven't checked in)
+    // Only count today as absent if explicitly marked "Absent"
+    if (isToday && !status) {
+      return;
+    }
+
+    // Default: Absent or unpaid 'Off'
     absencesCount++;
   });
 
-  const totalDeduction = absencesCount * deductionAmount;
+  // LOGIC: If month ended (or for current month calculation)
+  // and they have unused paid leave balance, use it to cover half days.
+  let halfDaysCoveredByLeave = 0;
+  let remainingAllowance = Math.max(0, monthlyAllowance - paidLeavesUsed);
+
+  if (remainingAllowance > 0 && halfDaysCount > 0) {
+    // 1 paid leave covers all half days (1 or 2 as per user request)
+    halfDaysCoveredByLeave = halfDaysCount;
+    remainingAllowance = 0;
+  }
+
+  // Calculate deductions
+  // Only unpaid absences and non-covered half days cost money
+  const realHalfDayAbsences = (halfDaysCount - halfDaysCoveredByLeave) * 0.5;
+  const totalAbsenceUnits = absencesCount + realHalfDayAbsences;
+
+  const totalDeduction = totalAbsenceUnits * deductionAmount;
   const finalSalary = Math.max(0, baseSalary - totalDeduction);
 
   return {
     baseSalary,
     deductionAmount,
-    absencesCount,
+    absencesCount: totalAbsenceUnits,
     totalDeduction,
     finalSalary,
     workingDaysCount: allDaysSoFar.length,
     presentCount: attendanceRecords.filter(
       (r) => r.status === "Present" || r.status === "Half Day",
     ).length,
+    paidLeavesUsed: monthlyAllowance - remainingAllowance,
+    remainingPaidLeaves: remainingAllowance,
+    halfDaysConverted: halfDaysCoveredByLeave > 0,
+    hasActivity: attendanceRecords.length > 0 || leaveRequests.length > 0,
   };
 }

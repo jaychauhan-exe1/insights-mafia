@@ -1,5 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server';
 import { getProfile } from '@/lib/supabase/get-profile';
+import Link from 'next/link';
+export const dynamic = 'force-dynamic';
 import {
     Table,
     TableBody,
@@ -14,299 +16,359 @@ import { Button } from '@/components/ui/button';
 import { PayoutDialog } from './payout-dialog';
 import Image from 'next/image';
 import { calculateSalary } from '@/lib/salary-utils';
-import { format, startOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, parseISO, isFuture } from 'date-fns';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ExpenseTracker } from './expense-tracker';
+import { MonthFilterBar } from './month-filter-bar';
+import { Badge } from '@/components/ui/badge';
 
-export default async function AdminPaymentsPage() {
+interface Props {
+    searchParams: Promise<{ month?: string; tab?: string }>;
+}
+
+export default async function AdminPaymentsPage({ searchParams }: Props) {
+    const sp = await searchParams;
     const profile = await getProfile();
     const supabase = await createAdminClient();
 
     if (!profile || profile.role !== 'Admin') return null;
 
-    const now = new Date();
-    const monthName = format(now, 'MMMM yyyy');
+    const currentYearMonth = sp.month || format(new Date(), 'yyyy-MM');
+    const activeTab = sp.tab || 'employees';
+    const displayMonth = parseISO(`${currentYearMonth}-01`);
+    const monthStartStr = format(startOfMonth(displayMonth), 'yyyy-MM-dd');
+    const monthEndStr = format(endOfMonth(displayMonth), 'yyyy-MM-dd');
 
-    // Fetch data for both freelancers and employees
+    // Fetch data for the selected month
     const [
         freelancersRes,
         allTransactionsRes,
         employeesRes,
         attendanceRes,
         leaveRequestsRes,
-        firstAttendanceRes
+        firstAttendanceRes,
+        initialExpensesRes,
+        paymentHistoryRes,
     ] = await Promise.all([
         supabase.from('profiles').select('*').eq('role', 'Freelancer'),
-        supabase.from('wallet_transactions').select('*'),
+        supabase.from('wallet_transactions').select('*')
+            .gte('created_at', `${monthStartStr}T00:00:00Z`)
+            .lte('created_at', `${monthEndStr}T23:59:59Z`),
         supabase.from('profiles').select('*').eq('role', 'Employee').order('name'),
-        supabase.from('attendance')
-            .select('user_id, date, status')
-            .gte('date', startOfMonth(now).toISOString().split('T')[0]),
-        supabase.from('leave_requests')
-            .select('*')
-            .gte('date', startOfMonth(now).toISOString().split('T')[0]),
-        supabase.from('attendance')
-            .select('user_id, date')
-            .order('date', { ascending: true })
+        supabase.from('attendance').select('user_id, date, status')
+            .gte('date', monthStartStr)
+            .lte('date', monthEndStr),
+        supabase.from('leave_requests').select('*')
+            .gte('date', monthStartStr)
+            .lte('date', monthEndStr),
+        supabase.from('attendance').select('user_id, date').order('date', { ascending: true }),
+        supabase.from('monthly_expenses').select('*')
+            .eq('month', currentYearMonth)
+            .order('is_auto', { ascending: false })
+            .order('created_at', { ascending: true }),
+        supabase.from('payment_history').select('*')
+            .eq('month', currentYearMonth),
     ]);
 
-    // Freelancer data
     const freelancers = freelancersRes.data || [];
     const allTransactions = allTransactionsRes.data || [];
-    const freelancerBalances = freelancers?.map(f => ({
-        ...f,
-        balance: Number(f.wallet_balance || 0)
-    })) || [];
+    const initialExpenses = initialExpensesRes.data || [];
+    const paymentHistory = (paymentHistoryRes as any)?.data || [];
 
-    // Employee data
+    const isCurrentMonth = currentYearMonth === format(new Date(), 'yyyy-MM');
+    const hasHistory = paymentHistory.length > 0;
+
+    // FREELANCER PROCESSING
+    const freelancerBalances = freelancers?.map(f => {
+        const historyRecord = paymentHistory.find((h: any) => h.user_id === f.id && h.role === 'Freelancer');
+        const monthCredits = historyRecord && !isCurrentMonth
+            ? Number(historyRecord.net_amount)
+            : allTransactions
+                .filter(t => t.freelancer_id === f.id && t.type === 'credit')
+                .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+        return {
+            ...f,
+            monthlyEarned: monthCredits,
+            balance: Number(f.wallet_balance || 0),
+            isFromHistory: !!historyRecord && !isCurrentMonth
+        };
+    }) || [];
+
+    // If we have history for a past month, we might want to show ONLY historical freelancers 
+    // but the system usually has the same set. For now, keep live profiles but use historical earned.
+
     const employees = employeesRes.data || [];
     const attendance = attendanceRes.data || [];
     const leaveRequests = leaveRequestsRes.data || [];
     const firstCheckins = firstAttendanceRes.data || [];
 
     const salaryData = employees.map(emp => {
+        const historyRecord = paymentHistory.find((h: any) => h.user_id === emp.id && h.role === 'Employee');
+
+        if (hasHistory && !isCurrentMonth && historyRecord) {
+            return {
+                ...emp,
+                finalSalary: Number(historyRecord.net_amount),
+                totalDeduction: Number(historyRecord.deductions),
+                absencesCount: historyRecord.meta?.absencesCount || 0,
+                halfDaysConverted: historyRecord.meta?.halfDaysConverted || false,
+                isFromHistory: true
+            };
+        }
+
         const empAttendance = attendance.filter(a => a.user_id === emp.id);
         const empLeaves = leaveRequests.filter(l => l.user_id === emp.id);
-        const joiningDate = firstCheckins.find(a => a.user_id === emp.id)?.date;
-        const calc = calculateSalary(Number(emp.salary || 0), Number(emp.deduction_amount || 0), empAttendance, empLeaves, joiningDate);
+        const joiningDate = (firstCheckins as any[]).find(a => a.user_id === emp.id)?.date;
+        const calc = calculateSalary(
+            Number(emp.salary || 0),
+            Number(emp.deduction_amount || 0),
+            empAttendance,
+            empLeaves,
+            joiningDate,
+            currentYearMonth
+        );
         return {
             ...emp,
-            ...calc
+            ...calc,
+            isFromHistory: false
         };
     });
 
-    const totalFreelancerUnpaid = freelancerBalances.reduce((acc, curr) => acc + Math.max(0, curr.balance), 0);
+    const isFutureMonth = isFuture(displayMonth);
+    const hasActivityGlobally = salaryData.some(s => s.hasActivity) || freelancerBalances.some(f => f.monthlyEarned > 0) || initialExpenses.length > 0;
+    const showEmptyState = (isFutureMonth || !hasActivityGlobally) && !isCurrentMonth;
+
+    const totalFreelancerEarnedMonth = freelancerBalances.reduce((acc, curr) => acc + curr.monthlyEarned, 0);
     const totalEmployeeNet = salaryData.reduce((acc, curr) => acc + curr.finalSalary, 0);
 
     return (
-        <div className="space-y-6 pb-20 lg:pb-0">
-            <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <h2 className="text-xl font-bold tracking-tight text-foreground">Financial Management</h2>
-                    <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest mt-1">Manage payouts and salary across the team</p>
-                </div>
-                <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-xl shadow-sm border border-border/50">
-                    <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Payout Layer Active</span>
+        <div className="p-4 md:p-8 space-y-8 animate-in fade-in duration-500">
+            <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-border/50">
+                <div className="space-y-1.5">
+                    <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
+                        Finance Hub
+                        <span className="text-primary text-3xl leading-none">.</span>
+                    </h1>
+                    <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                        Financial Operations Dashboard
+                        <span className="inline-block w-4 h-[1px] bg-border/50"></span>
+                    </p>
                 </div>
             </header>
 
-            <Tabs defaultValue="employees" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 max-w-[400px] mb-8 bg-gray-100 pb-11 pt-2 px-3">
-                    <TabsTrigger value="employees" className="font-medium py-2 text-[10px] uppercase tracking-widest">Employee Salary</TabsTrigger>
-                    <TabsTrigger value="freelancers" className="font-medium py-2 text-[10px] uppercase tracking-widest">Freelancer Payouts</TabsTrigger>
-                </TabsList>
+            {/* Global Month Selection for all Tabs */}
+            <MonthFilterBar />
 
-                <TabsContent value="employees" className="space-y-6 outline-none">
+            {showEmptyState ? (
+                <Card className="flex flex-col items-center justify-center py-24 border-dashed border-2 bg-muted/5">
+                    <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-6">
+                        <Calendar className="w-8 h-8 text-muted-foreground/40" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-foreground">No records for {format(displayMonth, 'MMMM yyyy')}</h3>
+                    <p className="text-sm text-muted-foreground mt-2 max-w-xs text-center">
+                        {isFutureMonth
+                            ? "This month hasn't started yet. Check back once attendance and payments are logged."
+                            : "We couldn't find any financial activity or attendance logs for this period."}
+                    </p>
+                    {!isFutureMonth && (
+                        <div className="mt-8 flex gap-3">
+                            <Button variant="outline" size="sm" asChild>
+                                <Link href={`?month=${format(new Date(), 'yyyy-MM')}`}>Go to Current Month</Link>
+                            </Button>
+                        </div>
+                    )}
+                </Card>
+            ) : (
+                <>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <Card className="p-6 border-border/50 bg-primary text-white shadow-xl relative overflow-hidden group">
-                            <Banknote className="absolute -right-4 -bottom-4 w-24 h-24 text-white/10 rotate-12 group-hover:scale-110 transition-transform duration-500" />
-                            <div className="relative z-10">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-60 mb-1">Total Net Salary</p>
-                                <h3 className="text-2xl font-bold tabular-nums">₹{totalEmployeeNet.toLocaleString('en-IN')}</h3>
+                        <Card className="p-6 border-border/50 bg-primary/5 hover:bg-primary/10 transition-colors group">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+                                    <Users className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Active Employees</p>
+                                    <h3 className="text-xl font-bold">{employees.length}</h3>
+                                </div>
                             </div>
                         </Card>
-                        <Card className="p-6 border-border/50 bg-white shadow-sm flex items-center justify-between">
-                            <div>
-                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-1">Total Deductions</p>
-                                <h3 className="text-2xl font-bold tabular-nums text-red-500">₹{salaryData.reduce((acc, s) => acc + s.totalDeduction, 0).toLocaleString('en-IN')}</h3>
+
+                        <Card className="p-6 border-border/50 bg-emerald-500/5 hover:bg-emerald-500/10 transition-colors group">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+                                    <Banknote className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Employee Payroll</p>
+                                    <h3 className="text-xl font-bold text-emerald-600 flex items-center">
+                                        <IndianRupee className="w-5 h-5" />
+                                        {totalEmployeeNet.toLocaleString('en-IN')}
+                                    </h3>
+                                </div>
                             </div>
-                            <AlertCircle className="w-8 h-8 text-red-500/10" />
                         </Card>
-                        <Card className="p-6 border-border/50 bg-white shadow-sm flex items-center justify-between">
-                            <div>
-                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-1">Active Employees</p>
-                                <h3 className="text-2xl font-bold tabular-nums">{employees.length}</h3>
+
+                        <Card className="p-6 border-border/50 bg-blue-500/5 hover:bg-blue-500/10 transition-colors group">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                                    <ArrowUpRight className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Freelancer Earnings</p>
+                                    <h3 className="text-xl font-bold text-blue-600 flex items-center">
+                                        <IndianRupee className="w-5 h-5" />
+                                        {totalFreelancerEarnedMonth.toLocaleString('en-IN')}
+                                    </h3>
+                                </div>
                             </div>
-                            <Users className="w-8 h-8 text-muted/20" />
                         </Card>
                     </div>
 
-                    <div className="hidden md:block">
-                        <Card className="border border-border/50 shadow-sm rounded-xl overflow-hidden bg-white">
-                            <div className="overflow-x-auto">
+                    <Tabs defaultValue={activeTab} value={activeTab} className="w-full">
+                        <TabsList className="grid w-full grid-cols-3 max-w-[500px] mb-8 bg-gray-100 h-11 px-1">
+                            <TabsTrigger value="employees" className="py-2 text-[11px] font-medium uppercase tracking-wider" asChild>
+                                <Link href={`?month=${currentYearMonth}&tab=employees`}>Employee Salary</Link>
+                            </TabsTrigger>
+                            <TabsTrigger value="freelancers" className="py-2 text-[11px] font-medium uppercase tracking-wider" asChild>
+                                <Link href={`?month=${currentYearMonth}&tab=freelancers`}>Freelancer Payouts</Link>
+                            </TabsTrigger>
+                            <TabsTrigger value="all" className="py-2 text-[11px] font-medium uppercase tracking-wider" asChild>
+                                <Link href={`?month=${currentYearMonth}&tab=all`}>All Expenses</Link>
+                            </TabsTrigger>
+                        </TabsList>
+
+                        <TabsContent value="employees" className="space-y-6 outline-none">
+                            <div className="bg-white rounded-2xl border border-border/50 overflow-hidden shadow-sm">
                                 <Table>
                                     <TableHeader className="bg-muted/50">
-                                        <TableRow className="border-border hover:bg-transparent h-12">
-                                            <TableHead className="px-6 font-bold text-[10px] text-muted-foreground uppercase tracking-widest">Employee</TableHead>
-                                            <TableHead className="font-bold text-[10px] text-muted-foreground uppercase tracking-widest">Base Salary</TableHead>
-                                            <TableHead className="font-bold text-[10px] text-muted-foreground uppercase tracking-widest text-center">Absences</TableHead>
-                                            <TableHead className="font-bold text-[10px] text-muted-foreground uppercase tracking-widest text-center">Deductions</TableHead>
-                                            <TableHead className="text-right px-6 font-bold text-[10px] text-muted-foreground uppercase tracking-widest">Net Payable</TableHead>
+                                        <TableRow className="h-14 border-border/50 hover:bg-muted/50 transition-colors">
+                                            <TableHead className="w-16 px-6"></TableHead>
+                                            <TableHead className="font-semibold text-[11px] uppercase tracking-wider text-muted-foreground px-6">Employee Info</TableHead>
+                                            <TableHead className="font-semibold text-[11px] uppercase tracking-wider text-muted-foreground text-center">Status</TableHead>
+                                            <TableHead className="font-semibold text-[11px] uppercase tracking-wider text-muted-foreground text-center">Base Salary</TableHead>
+                                            <TableHead className="font-semibold text-[11px] uppercase tracking-wider text-muted-foreground text-center">Deduction</TableHead>
+                                            <TableHead className="font-semibold text-[11px] uppercase tracking-wider text-primary text-right px-6">Net Salary</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {salaryData.map((s) => (
-                                            <TableRow key={s.id} className="border-border group h-20 hover:bg-muted/30 transition-all duration-300">
+                                        {salaryData.map((emp) => (
+                                            <TableRow key={emp.id} className="h-20 border-border/50 hover:bg-muted/30 transition-colors group">
                                                 <TableCell className="px-6">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-full bg-muted border border-white flex items-center justify-center font-bold text-[10px] overflow-hidden">
-                                                            {s.avatar_url ? <Image src={s.avatar_url} alt="" width={32} height={32} unoptimized /> : s.name.charAt(0)}
-                                                        </div>
-                                                        <div>
-                                                            <p className="font-bold text-[13px] text-foreground leading-none">{s.name}</p>
-                                                            <p className="text-[9px] font-bold text-muted-foreground/50 uppercase tracking-tighter mt-1">{s.joiningDate ? `Since ${format(new Date(s.joiningDate), 'MMM yyyy')}` : 'Full Month'}</p>
-                                                        </div>
+                                                    <div className="relative w-10 h-10 rounded-full bg-muted border-2 border-background shadow-sm overflow-hidden flex-shrink-0">
+                                                        {emp.avatar_url ? (
+                                                            <Image src={emp.avatar_url} alt={emp.name || ''} fill className="object-cover" />
+                                                        ) : (
+                                                            <div className="w-full h-full flex items-center justify-center font-semibold text-muted-foreground uppercase text-[12px]">
+                                                                {emp.name?.charAt(0)}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="font-bold text-[12px]">₹{Number(s.salary || 0).toLocaleString('en-IN')}</TableCell>
-                                                <TableCell className="text-center font-bold text-[12px] text-red-500">{s.absencesCount}</TableCell>
-                                                <TableCell className="text-center font-bold text-[12px] text-red-400">₹{s.totalDeduction.toLocaleString('en-IN')}</TableCell>
+                                                <TableCell className="px-6">
+                                                    <div className="space-y-1">
+                                                        <p className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors">{emp.name}</p>
+                                                        <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">{emp.email}</p>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-center">
+                                                    <div className="flex flex-col items-center gap-1">
+                                                        <Badge variant="outline" className="text-[9px] font-medium h-5 border-border/50 bg-muted/30">
+                                                            {emp.absencesCount} Absent Unit
+                                                        </Badge>
+                                                        {emp.halfDaysConverted && (
+                                                            <Badge variant="outline" className="text-[9px] font-medium h-5 border-blue-100 bg-blue-50 text-blue-600">
+                                                                {emp.isFromHistory ? 'Half Days Covered (Historical)' : 'Half Days Covered'}
+                                                            </Badge>
+                                                        )}
+                                                        {emp.isFromHistory && (
+                                                            <Badge variant="outline" className="text-[9px] font-medium h-5 border-amber-100 bg-amber-50 text-amber-600">
+                                                                Record Processed
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-center font-semibold text-sm tabular-nums">₹{Number(emp.salary || 0).toLocaleString('en-IN')}</TableCell>
+                                                <TableCell className="text-center">
+                                                    <div className="flex items-center justify-center gap-1 text-red-500 font-semibold text-sm tabular-nums">
+                                                        <span>-</span>
+                                                        <span>₹{emp.totalDeduction.toLocaleString('en-IN')}</span>
+                                                    </div>
+                                                </TableCell>
                                                 <TableCell className="text-right px-6">
-                                                    <p className="text-[14px] font-bold text-primary">₹{s.finalSalary.toLocaleString('en-IN')}</p>
+                                                    <div className="text-lg font-bold text-primary tabular-nums">₹{emp.finalSalary.toLocaleString('en-IN')}</div>
                                                 </TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
                                 </Table>
                             </div>
-                        </Card>
-                    </div>
+                        </TabsContent>
 
-                    {/* Mobile Card View */}
-                    <div className="grid grid-cols-1 gap-4 md:hidden">
-                        {salaryData.map((s) => (
-                            <Card key={s.id} className="p-5 border-border/50 shadow-sm bg-white space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-muted border border-white flex items-center justify-center font-bold text-[12px] overflow-hidden">
-                                            {s.avatar_url ? <Image src={s.avatar_url} alt="" width={40} height={40} unoptimized /> : s.name.charAt(0)}
-                                        </div>
-                                        <div>
-                                            <p className="font-bold text-[14px] text-foreground leading-none">{s.name}</p>
-                                            <p className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-tighter mt-1.5">{s.joiningDate ? `Since ${format(new Date(s.joiningDate), 'MMM yyyy')}` : 'Full Month'}</p>
-                                        </div>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-[14px] font-bold text-primary tabular-nums">₹{s.finalSalary.toLocaleString('en-IN')}</p>
-                                        <p className="text-[9px] font-bold text-muted-foreground uppercase opacity-50">Net Pay</p>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-3 gap-2 pt-4 border-t border-border/50">
-                                    <div>
-                                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Base</p>
-                                        <p className="text-[11px] font-bold text-foreground">₹{Number(s.salary || 0).toLocaleString('en-IN')}</p>
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Absences</p>
-                                        <p className="text-[11px] font-bold text-red-500">{s.absencesCount}</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Penalty</p>
-                                        <p className="text-[11px] font-bold text-red-400">₹{s.totalDeduction.toLocaleString('en-IN')}</p>
-                                    </div>
-                                </div>
-                            </Card>
-                        ))}
-                    </div>
-                </TabsContent>
-
-                <TabsContent value="freelancers" className="space-y-6 outline-none">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <Card className="border border-border/50 shadow-xl rounded-xl p-6 bg-emerald-500 text-white flex items-center justify-between overflow-hidden relative group">
-                            <IndianRupee className="absolute -right-4 -bottom-4 w-24 h-24 text-white/20 rotate-12 group-hover:scale-110 transition-transform duration-500" />
-                            <div className="relative z-10">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-70 mb-1">Total Unpaid Balance</p>
-                                <h3 className="text-2xl font-bold tabular-nums">₹{totalFreelancerUnpaid.toLocaleString('en-IN')}</h3>
-                            </div>
-                        </Card>
-                        <Card className="border border-border/50 shadow-sm rounded-xl p-6 bg-white flex items-center justify-between">
-                            <div>
-                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-1">Total Payouts Done</p>
-                                <h3 className="text-2xl font-bold tabular-nums text-foreground">
-                                    ₹{allTransactions?.filter(t => t.type === 'debit').reduce((acc, curr) => acc + Number(curr.amount), 0).toLocaleString('en-IN') || 0}
-                                </h3>
-                            </div>
-                            <ArrowUpRight className="w-8 h-8 text-emerald-500/10" />
-                        </Card>
-                        <Card className="border border-border/50 shadow-sm rounded-xl p-6 bg-white flex items-center justify-between">
-                            <div>
-                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-1">Verified Freelancers</p>
-                                <h3 className="text-2xl font-bold tabular-nums text-foreground">{freelancers.length}</h3>
-                            </div>
-                            <Users className="w-8 h-8 text-muted/30" />
-                        </Card>
-                    </div>
-
-                    <div className="hidden md:block">
-                        <Card className="border border-border/50 shadow-sm rounded-xl overflow-hidden bg-white">
-                            <div className="overflow-x-auto">
-                                <Table>
-                                    <TableHeader className="bg-muted/50">
-                                        <TableRow className="border-border hover:bg-transparent h-12">
-                                            <TableHead className="px-6 font-bold text-[10px] text-muted-foreground uppercase tracking-widest">Freelancer</TableHead>
-                                            <TableHead className="font-bold text-[10px] text-muted-foreground uppercase tracking-widest">Available Balance</TableHead>
-                                            <TableHead className="text-right px-6 font-bold text-[10px] text-muted-foreground uppercase tracking-widest">Action</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {freelancerBalances.map((f) => (
-                                            <TableRow key={f.id} className="border-border group h-20 hover:bg-muted/30 transition-all duration-300">
-                                                <TableCell className="px-6">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-full bg-muted border border-white shadow-sm overflow-hidden flex items-center justify-center font-bold text-xs text-muted-foreground uppercase tracking-tighter">
-                                                            {f.avatar_url ? <Image src={f.avatar_url} alt="" width={32} height={32} unoptimized /> : f.name.charAt(0)}
-                                                        </div>
-                                                        <div>
-                                                            <p className="font-bold text-[13px] text-foreground leading-none">{f.name}</p>
-                                                            <p className="text-[9px] font-bold text-muted-foreground/50 uppercase tracking-tighter mt-1">{f.email}</p>
-                                                        </div>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <p className={`font-bold text-[14px] tabular-nums ${f.balance > 0 ? 'text-primary' : 'text-muted-foreground/30'}`}>
-                                                        ₹{f.balance.toLocaleString('en-IN')}
-                                                    </p>
-                                                </TableCell>
-                                                <TableCell className="text-right px-6">
-                                                    {f.balance > 0 ? (
-                                                        <PayoutDialog freelancerId={f.id} freelancerName={f.name} balance={f.balance} />
+                        <TabsContent value="freelancers" className="space-y-6 outline-none">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {freelancerBalances.map((freelancer) => (
+                                    <Card key={freelancer.id} className="p-6 border-border/50 bg-white hover:border-primary/50 hover:shadow-xl transition-all duration-300 group">
+                                        <div className="space-y-6">
+                                            <div className="flex items-center gap-4">
+                                                <div className="relative w-14 h-14 rounded-2xl bg-muted border-2 border-background shadow-lg overflow-hidden flex-shrink-0 group-hover:scale-110 transition-transform">
+                                                    {freelancer.avatar_url ? (
+                                                        <Image src={freelancer.avatar_url} alt={freelancer.name || ''} fill className="object-cover" />
                                                     ) : (
-                                                        <span className="text-[10px] font-bold text-muted-foreground/30 uppercase tracking-widest px-3">Settled</span>
+                                                        <div className="w-full h-full flex items-center justify-center font-semibold text-muted-foreground uppercase text-lg">
+                                                            {freelancer.name?.charAt(0)}
+                                                        </div>
                                                     )}
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </div>
-                        </Card>
-                    </div>
+                                                </div>
+                                                <div>
+                                                    <p className="font-semibold text-lg text-foreground group-hover:text-primary transition-colors">{freelancer.name}</p>
+                                                    <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">{freelancer.email}</p>
+                                                </div>
+                                            </div>
 
-                    {/* Mobile Card View */}
-                    <div className="grid grid-cols-1 gap-4 md:hidden">
-                        {freelancerBalances.map((f) => (
-                            <Card key={f.id} className="p-5 border-border/50 shadow-sm bg-white space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-muted border border-white flex items-center justify-center font-bold text-[12px] overflow-hidden">
-                                            {f.avatar_url ? <Image src={f.avatar_url} alt="" width={40} height={40} unoptimized /> : f.name.charAt(0)}
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="p-3 rounded-xl bg-muted/30 border border-border/50">
+                                                    <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider mb-1">{format(displayMonth, 'MMM')} Earnings</p>
+                                                    <p className="text-lg font-bold text-blue-600 flex items-center tabular-nums">
+                                                        <IndianRupee className="w-4 h-4" />
+                                                        {freelancer.monthlyEarned.toLocaleString('en-IN')}
+                                                    </p>
+                                                </div>
+                                                <div className="p-3 rounded-xl bg-primary/5 border border-primary/20">
+                                                    <p className="text-[9px] font-medium text-primary uppercase tracking-wider mb-1">Unpaid Balance</p>
+                                                    <p className="text-lg font-bold text-primary flex items-center tabular-nums">
+                                                        <IndianRupee className="w-4 h-4" />
+                                                        {freelancer.balance.toLocaleString('en-IN')}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {freelancer.balance > 0 ? (
+                                                <PayoutDialog
+                                                    freelancerId={freelancer.id}
+                                                    freelancerName={freelancer.name || ''}
+                                                    balance={freelancer.balance}
+                                                />
+                                            ) : (
+                                                <Button disabled className="w-full bg-muted/30 text-muted-foreground/50 font-medium text-[10px] uppercase tracking-wider h-10 rounded-xl cursor-not-allowed">
+                                                    Balance Settled
+                                                </Button>
+                                            )}
                                         </div>
-                                        <div>
-                                            <p className="font-bold text-[14px] text-foreground leading-none">{f.name}</p>
-                                            <p className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-tighter mt-1.5 truncate max-w-[120px]">{f.email}</p>
-                                        </div>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className={`text-[14px] font-bold tabular-nums ${f.balance > 0 ? 'text-primary' : 'text-muted-foreground/30'}`}>
-                                            ₹{f.balance.toLocaleString('en-IN')}
-                                        </p>
-                                        <p className="text-[9px] font-bold text-muted-foreground uppercase opacity-50">Balance</p>
-                                    </div>
-                                </div>
-                                <div className="pt-4 border-t border-border/50">
-                                    {f.balance > 0 ? (
-                                        <PayoutDialog freelancerId={f.id} freelancerName={f.name} balance={f.balance} />
-                                    ) : (
-                                        <Button disabled className="w-full bg-muted/30 text-muted-foreground/50 font-bold text-[10px] uppercase tracking-widest h-10 rounded-xl cursor-not-allowed">
-                                            Balance Settled
-                                        </Button>
-                                    )}
-                                </div>
-                            </Card>
-                        ))}
-                    </div>
-                </TabsContent>
-            </Tabs>
+                                    </Card>
+                                ))}
+                            </div>
+                        </TabsContent>
+
+                        <TabsContent value="all" className="outline-none">
+                            <ExpenseTracker
+                                initialExpenses={initialExpenses as any}
+                                currentMonth={currentYearMonth}
+                            />
+                        </TabsContent>
+                    </Tabs>
+                </>
+            )}
         </div>
     );
 }

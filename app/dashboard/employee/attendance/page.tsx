@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { AttendanceButtons } from "./attendance-buttons";
 import { LeaveRequestModal } from "./leave-request-modal";
-import { Clock, CheckCircle2, History, Timer, Plane } from "lucide-react";
+import { Clock, CheckCircle2, History, Timer, Plane, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AttendanceCalendar } from "@/components/attendance-calendar";
 import Link from "next/link";
@@ -16,7 +16,9 @@ import {
     getISTToday,
     formatISTTime,
     getISTParts,
+    getISTHours,
 } from "@/lib/date-utils";
+import { calculateSalary } from "@/lib/salary-utils";
 
 export default async function AttendancePage({
     searchParams,
@@ -54,19 +56,11 @@ export default async function AttendancePage({
         .order("date", { ascending: false })
         .range(start, end);
 
-    const history =
-        historyRaw?.map((entry) => {
-            if (
-                entry.status === "Present" &&
-                !entry.check_out &&
-                isAfterCheckoutWindow(entry.date)
-            ) {
-                return { ...entry, status: "Absent" };
-            }
-            return entry;
-        }) || [];
+    const historyRawData = historyRaw || [];
 
-    const totalPages = Math.ceil((count || 0) / pageSize);
+    // Group history by month for salary calculation (needed for half-day coverage logic)
+    const monthsInHistory = Array.from(new Set(historyRawData.map(e => e.date.substring(0, 7))));
+    const monthSummaries: Record<string, any> = {};
 
     const { data: allHistory } = await supabase
         .from("attendance")
@@ -76,6 +70,38 @@ export default async function AttendancePage({
         `)
         .eq("user_id", profile.id)
         .order("date", { ascending: false });
+
+    for (const month of monthsInHistory) {
+        const monthAttendance = allHistory?.filter(a => a.date.startsWith(month)) || [];
+        monthSummaries[month] = calculateSalary(
+            Number(profile.salary || 0),
+            Number(profile.deduction_amount || 0),
+            monthAttendance,
+            [], // leaveRequests
+            undefined,
+            month
+        );
+    }
+
+    const history =
+        historyRawData.map((entry) => {
+            let status = entry.status || "Present";
+            if (
+                status === "Present" &&
+                !entry.check_out &&
+                isAfterCheckoutWindow(entry.date)
+            ) {
+                status = "Absent";
+            }
+            if (status === "Off") status = "Paid Off";
+
+            const monthKey = entry.date.substring(0, 7);
+            const isHalfDayCovered = status === "Half Day" && monthSummaries[monthKey]?.halfDaysConverted;
+
+            return { ...entry, status, isHalfDayCovered };
+        }) || [];
+
+    const totalPages = Math.ceil((count || 0) / pageSize);
 
     const { data: firstAttendance } = await supabase
         .from("attendance")
@@ -90,6 +116,32 @@ export default async function AttendancePage({
         .select("name")
         .order("name");
     const sortedClients = clients?.map((c) => c.name) || [];
+
+    const { data: holidays } = await supabase
+        .from('holidays')
+        .select('*')
+        .order('date', { ascending: false });
+
+    const currentHour = getISTHours();
+    const isBeforeWorkingHours = currentHour < 10;
+    // Show notice only during office hours (10 AM - 6 PM) if not checked in
+    const shouldShowNotice = currentHour >= 10 && currentHour < 18 && !todayAttendance;
+
+    // Merge holidays into history for the display list
+    const holidayHistory = (holidays || [])
+        .filter(h => h.date <= today)
+        .map(h => ({
+            id: h.id,
+            date: h.date,
+            status: 'Holiday',
+            check_in: null,
+            check_out: null,
+            holiday_label: h.label
+        }));
+
+    const combinedHistory = [...history, ...holidayHistory]
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, pageSize);
 
     return (
         <div className="space-y-6 mx-auto pb-20 lg:pb-0">
@@ -110,6 +162,18 @@ export default async function AttendancePage({
                     </div>
                 </div>
             </header>
+
+            {shouldShowNotice && (
+                <Card className="border-none bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl flex items-center gap-4 animate-in slide-in-from-top duration-500">
+                    <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-600 shrink-0">
+                        <AlertCircle className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <p className="text-sm font-bold text-amber-700">Attendance Reminder</p>
+                        <p className="text-[11px] text-amber-600/80 font-medium">You haven't checked in for today yet. Please record your attendance.</p>
+                    </div>
+                </Card>
+            )}
 
             <div className="grid lg:grid-cols-3 gap-6">
                 {/* Left: Check-in/out Controls */}
@@ -142,6 +206,7 @@ export default async function AttendancePage({
                                     <AttendanceButtons
                                         isCheckedIn={false}
                                         clients={sortedClients}
+                                        isDisabled={isBeforeWorkingHours}
                                     />
                                     <p className="text-white/40 text-[9px] font-extrabold uppercase tracking-[0.2em]">
                                         TAP TO CLOCK IN
@@ -232,8 +297,8 @@ export default async function AttendancePage({
                         <CardContent className="p-0 flex-1">
                             <Table>
                                 <TableBody>
-                                    {history && history.length > 0 ? (
-                                        history.map((entry) => (
+                                    {combinedHistory && combinedHistory.length > 0 ? (
+                                        combinedHistory.map((entry) => (
                                             <TableRow
                                                 key={entry.id}
                                                 className="border-border h-16 hover:bg-muted/30 transition-all duration-300"
@@ -291,12 +356,14 @@ export default async function AttendancePage({
                                                             </div>
                                                         </div>
                                                         <Badge
-                                                            className={`border-none text-[8px] font-bold h-4 px-1.5 uppercase ${entry.status === "Present" ? "bg-emerald-50 text-emerald-500" :
-                                                                entry.status === "Absent" ? "bg-red-50 text-red-500" :
-                                                                    entry.status === "Paid Off" ? "bg-emerald-100 text-emerald-700" :
-                                                                        "bg-muted text-muted-foreground/50"}`}
+                                                            className={`border-none text-[8px] font-bold h-4 px-1.5 uppercase ${entry.isHalfDayCovered ? "bg-blue-50 text-blue-600 border border-blue-100" :
+                                                                entry.status === "Present" ? "bg-emerald-50 text-emerald-500" :
+                                                                    entry.status === "Absent" ? "bg-red-50 text-red-500" :
+                                                                        entry.status === "Paid Off" ? "bg-blue-50 text-blue-600" :
+                                                                            entry.status === "Holiday" ? "bg-purple-50 text-purple-500" :
+                                                                                "bg-muted text-muted-foreground/50"}`}
                                                         >
-                                                            {entry.status || "Present"}
+                                                            {entry.isHalfDayCovered ? "Half Day Covered" : (entry.holiday_label || entry.status || "Present")}
                                                         </Badge>
                                                     </div>
                                                 </TableCell>
@@ -323,6 +390,7 @@ export default async function AttendancePage({
                 <div className="lg:col-span-2">
                     <AttendanceCalendar
                         records={allHistory || []}
+                        holidays={holidays || []}
                         joiningDate={firstAttendance?.date}
                     />
                 </div>

@@ -8,6 +8,25 @@ CREATE TABLE IF NOT EXISTS public.clients (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Holidays table (company-wide)
+CREATE TABLE IF NOT EXISTS public.holidays (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  date DATE NOT NULL UNIQUE,
+  label TEXT NOT NULL DEFAULT 'Holiday',
+  created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Expense entries (monthly overhead tracker for finance page)
+CREATE TABLE IF NOT EXISTS public.expense_entries (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  month TEXT NOT NULL,          -- Format: YYYY-MM
+  label TEXT NOT NULL,
+  amount NUMERIC(15, 2) DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Profiles table to store additional user info
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
@@ -86,6 +105,8 @@ ALTER TABLE public.attendance ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.wallet_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.leave_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.holidays ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.expense_entries ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================
 -- POLICIES
@@ -143,5 +164,21 @@ DROP POLICY IF EXISTS "Freelancers can view own wallet" ON public.wallet_transac
 DROP POLICY IF EXISTS "Admins can manage wallet" ON public.wallet_transactions;
 CREATE POLICY "Freelancers can view own wallet" ON public.wallet_transactions FOR SELECT USING (freelancer_id = auth.uid());
 CREATE POLICY "Admins can manage wallet" ON public.wallet_transactions FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'Admin')
+);
+
+-- Holidays
+DROP POLICY IF EXISTS "Everyone can view holidays" ON public.holidays;
+DROP POLICY IF EXISTS "Admins can manage holidays" ON public.holidays;
+CREATE POLICY "Everyone can view holidays" ON public.holidays FOR SELECT USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid())
+);
+CREATE POLICY "Admins can manage holidays" ON public.holidays FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'Admin')
+);
+
+-- Expense Entries
+DROP POLICY IF EXISTS "Admins can manage expense entries" ON public.expense_entries;
+CREATE POLICY "Admins can manage expense entries" ON public.expense_entries FOR ALL USING (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'Admin')
 );
