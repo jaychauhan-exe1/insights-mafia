@@ -153,18 +153,20 @@ export async function submitLeaveRequest(data: {
   dates: string[];
   reason: string;
   will_work_sunday: boolean;
+  is_paid_leave?: boolean;
 }) {
   const profile = await getProfile();
   if (!profile) return { error: "Not authenticated" };
 
   const supabase = await createAdminClient();
 
-  const requests = data.dates.map((date) => ({
+  const requests = data.dates.map((date, index) => ({
     user_id: profile.id,
     date,
     reason: data.reason,
     status: "Pending",
     will_work_sunday: data.will_work_sunday,
+    is_paid_leave: data.is_paid_leave && index === 0, // Only the first day is paid
   }));
 
   const { error } = await supabase.from("leave_requests").insert(requests);

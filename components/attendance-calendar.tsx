@@ -151,7 +151,7 @@ export function AttendanceCalendar({ records, joiningDate }: { records: Attendan
                                                 mainStatus === 'Off' || mainStatus === 'Paid Off' ? 'bg-blue-500/10 text-blue-600' :
                                                     'bg-red-500/10 text-red-600'
                                             }`}>
-                                            {dayRecords.length > 1 ? `${dayRecords.length} Records` : (mainStatus === 'Paid Off' ? 'Off' : mainStatus)}
+                                            {dayRecords.length > 1 ? `${dayRecords.length} Records` : mainStatus}
                                         </Badge>
                                     )}
                                 </div>
@@ -175,6 +175,10 @@ export function AttendanceCalendar({ records, joiningDate }: { records: Attendan
                         <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
                             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Off</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-emerald-700 shadow-[0_0_8px_rgba(4,120,87,0.4)]" />
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Paid Off</span>
                         </div>
                     </div>
                 </CardContent>
@@ -222,7 +226,7 @@ export function AttendanceCalendar({ records, joiningDate }: { records: Attendan
                                                             record.status === 'Off' || record.status === 'Paid Off' ? 'bg-blue-50 text-blue-500' :
                                                                 'bg-red-50 text-red-500'
                                                         }`}>
-                                                        {record.status === 'Paid Off' ? 'Off' : record.status}
+                                                        {record.status}
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell>

@@ -340,7 +340,12 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
                                     {leaves.map(leave => (
                                         <div key={leave.id} className="p-4 hover:bg-muted/10 transition-colors">
                                             <div className="flex justify-between items-start mb-1.5">
-                                                <p className="font-bold text-[12px]">{new Date(leave.date).toLocaleDateString()}</p>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="font-bold text-[12px]">{new Date(leave.date).toLocaleDateString()}</p>
+                                                    {leave.is_paid_leave && (
+                                                        <Badge className="bg-emerald-50 text-emerald-600 border-none text-[8px] font-bold uppercase py-0 h-4">Paid</Badge>
+                                                    )}
+                                                </div>
                                                 <Badge className={`uppercase text-[8px] font-bold border-none px-1 h-4 ${leave.status === 'Approved' ? 'bg-emerald-50 text-emerald-500' :
                                                     leave.status === 'Rejected' ? 'bg-red-50 text-red-500' :
                                                         'bg-amber-50 text-amber-500'

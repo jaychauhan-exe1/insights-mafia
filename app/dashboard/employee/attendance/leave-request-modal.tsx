@@ -27,6 +27,7 @@ export function LeaveRequestModal() {
     const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [reason, setReason] = useState('');
     const [willWorkSunday, setWillWorkSunday] = useState(false);
+    const [isPaidLeave, setIsPaidLeave] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -52,13 +53,14 @@ export function LeaveRequestModal() {
                 dates.push(startDate);
             }
 
-            const res = await submitLeaveRequest({ dates, reason, will_work_sunday: willWorkSunday });
+            const res = await submitLeaveRequest({ dates, reason, will_work_sunday: willWorkSunday, is_paid_leave: isPaidLeave });
             if (res.error) toast.error(res.error);
             else {
                 toast.success(`Leave request submitted for ${dates.length} day${dates.length > 1 ? 's' : ''}`);
                 setOpen(false);
                 setReason('');
                 setWillWorkSunday(false);
+                setIsPaidLeave(false);
             }
         } catch (error) {
             toast.error('Something went wrong');
@@ -128,6 +130,16 @@ export function LeaveRequestModal() {
                                 </div>
                             </div>
                         )}
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-emerald-50/50 border border-emerald-100/50 mb-2">
+                        <div className="space-y-0.5">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-emerald-700 flex items-center gap-2">
+                                Use Paid Leave
+                                {isPaidLeave && <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />}
+                            </label>
+                            <p className="text-[9px] text-emerald-600/70 font-bold">Deduct from paid leave balance</p>
+                        </div>
+                        <Switch checked={isPaidLeave} onCheckedChange={setIsPaidLeave} />
                     </div>
                     <div className="space-y-2">
                         <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Reason for Leave</label>

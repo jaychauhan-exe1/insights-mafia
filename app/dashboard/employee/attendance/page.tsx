@@ -290,11 +290,12 @@ export default async function AttendancePage({
                                                             </div>
                                                         </div>
                                                         <Badge
-                                                            className={`border-none text-[8px] font-bold h-4 px-1.5 uppercase ${entry.status === "Present" ? "bg-emerald-50 text-emerald-500" : entry.status === "Absent" ? "bg-red-50 text-red-500" : "bg-muted text-muted-foreground/50"}`}
+                                                            className={`border-none text-[8px] font-bold h-4 px-1.5 uppercase ${entry.status === "Present" ? "bg-emerald-50 text-emerald-500" :
+                                                                entry.status === "Absent" ? "bg-red-50 text-red-500" :
+                                                                    entry.status === "Paid Off" ? "bg-emerald-100 text-emerald-700" :
+                                                                        "bg-muted text-muted-foreground/50"}`}
                                                         >
-                                                            {entry.status === "Paid Off"
-                                                                ? "Off"
-                                                                : entry.status || "Present"}
+                                                            {entry.status || "Present"}
                                                         </Badge>
                                                     </div>
                                                 </TableCell>

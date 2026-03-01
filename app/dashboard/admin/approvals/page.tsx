@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ReviewTaskDialog } from '@/app/dashboard/tasks/review-task-dialog';
+import { approveLeaveRequest, rejectLeaveRequest } from './actions';
 
 export default async function ApprovalsPage() {
     const profile = await getProfile();
@@ -178,7 +179,10 @@ export default async function ApprovalsPage() {
                                                     <div className="flex items-center gap-2">
                                                         <p className="font-bold text-[13px] text-foreground leading-none">{format(new Date(request.date), 'MMMM dd, yyyy')}</p>
                                                         {request.will_work_sunday && (
-                                                            <Badge className="bg-amber-50 text-amber-600 border-none text-[8px] font-bold uppercase py-0 h-4">Promise Sunday</Badge>
+                                                            <Badge className="bg-amber-50 text-amber-600 border-none text-[8px] font-bold uppercase py-0 h-4 shadow-none">Promise Sunday</Badge>
+                                                        )}
+                                                        {request.is_paid_leave && (
+                                                            <Badge className="bg-emerald-50 text-emerald-600 border-none text-[8px] font-bold uppercase py-0 h-4 shadow-none">Paid Leave</Badge>
                                                         )}
                                                     </div>
                                                     <p className="text-[10px] font-medium text-muted-foreground truncate max-w-[300px] leading-relaxed">{request.reason}</p>
@@ -186,33 +190,12 @@ export default async function ApprovalsPage() {
                                             </TableCell>
                                             <TableCell className="text-right px-6">
                                                 <div className="flex justify-end gap-2">
-                                                    <form action={async () => {
-                                                        'use server';
-                                                        const supabase = await createAdminClient();
-                                                        await supabase.from('leave_requests').update({ status: 'Approved' }).eq('id', request.id);
-
-                                                        // Also create an attendance record with status 'Off' for that day
-                                                        await supabase.from('attendance').insert({
-                                                            user_id: request.user_id,
-                                                            date: request.date,
-                                                            status: 'Off'
-                                                        });
-
-                                                        const { revalidatePath } = await import('next/cache');
-                                                        revalidatePath('/dashboard/admin/approvals');
-                                                        revalidatePath('/dashboard/admin/attendance');
-                                                    }}>
+                                                    <form action={async () => { await approveLeaveRequest(request.id); }}>
                                                         <Button size="sm" className="h-8 px-4 bg-primary hover:bg-primary/90 text-white rounded-lg font-bold text-[9px] uppercase tracking-widest transition-all duration-300">
                                                             Approve
                                                         </Button>
                                                     </form>
-                                                    <form action={async () => {
-                                                        'use server';
-                                                        const supabase = await createAdminClient();
-                                                        await supabase.from('leave_requests').update({ status: 'Rejected' }).eq('id', request.id);
-                                                        const { revalidatePath } = await import('next/cache');
-                                                        revalidatePath('/dashboard/admin/approvals');
-                                                    }}>
+                                                    <form action={async () => { await rejectLeaveRequest(request.id); }}>
                                                         <Button size="sm" variant="outline" className="h-8 px-4 text-red-500 hover:text-red-600 border-red-200 hover:border-red-300 hover:bg-red-50 rounded-lg font-bold text-[9px] uppercase tracking-widest transition-all duration-300">
                                                             Reject
                                                         </Button>
@@ -250,38 +233,25 @@ export default async function ApprovalsPage() {
                                     <p className="font-bold text-[14px] text-foreground leading-none">{request.user?.name}</p>
                                     <p className="text-[11px] font-bold text-primary mt-1.5">{format(new Date(request.date), 'MMM dd, yyyy')}</p>
                                 </div>
-                                {request.will_work_sunday && (
-                                    <Badge className="bg-amber-50 text-amber-600 border-none text-[8px] font-bold uppercase py-1 h-fit">Promise Sun</Badge>
-                                )}
+                                <div className="flex flex-col gap-1 items-end">
+                                    {request.will_work_sunday && (
+                                        <Badge className="bg-amber-50 text-amber-600 border-none text-[8px] font-bold uppercase py-1 h-fit">Promise Sun</Badge>
+                                    )}
+                                    {request.is_paid_leave && (
+                                        <Badge className="bg-emerald-50 text-emerald-600 border-none text-[8px] font-bold uppercase py-1 h-fit">Paid Leave</Badge>
+                                    )}
+                                </div>
                             </div>
                             <div className="bg-muted/30 p-3 rounded-xl">
                                 <p className="text-[11px] text-muted-foreground italic leading-relaxed">"{request.reason}"</p>
                             </div>
                             <div className="flex gap-2 pt-2">
-                                <form className="flex-1" action={async () => {
-                                    'use server';
-                                    const supabase = await createAdminClient();
-                                    await supabase.from('leave_requests').update({ status: 'Approved' }).eq('id', request.id);
-                                    await supabase.from('attendance').insert({
-                                        user_id: request.user_id,
-                                        date: request.date,
-                                        status: 'Off'
-                                    });
-                                    const { revalidatePath } = await import('next/cache');
-                                    revalidatePath('/dashboard/admin/approvals');
-                                    revalidatePath('/dashboard/admin/attendance');
-                                }}>
+                                <form className="flex-1" action={async () => { await approveLeaveRequest(request.id); }}>
                                     <Button className="w-full h-10 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/10">
                                         Approve
                                     </Button>
                                 </form>
-                                <form className="flex-1" action={async () => {
-                                    'use server';
-                                    const supabase = await createAdminClient();
-                                    await supabase.from('leave_requests').update({ status: 'Rejected' }).eq('id', request.id);
-                                    const { revalidatePath } = await import('next/cache');
-                                    revalidatePath('/dashboard/admin/approvals');
-                                }}>
+                                <form className="flex-1" action={async () => { await rejectLeaveRequest(request.id); }}>
                                     <Button variant="outline" className="w-full h-10 text-red-500 border-red-100 hover:bg-red-50 rounded-xl font-bold text-[10px] uppercase tracking-widest">
                                         Reject
                                     </Button>
