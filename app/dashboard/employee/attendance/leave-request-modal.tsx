@@ -17,10 +17,12 @@ import { Calendar as CalendarIcon, Loader2, Plane, AlertTriangle } from 'lucide-
 import { submitLeaveRequest } from './actions';
 import { toast } from 'sonner';
 import { Switch } from '@/components/ui/switch';
+import { cn } from '@/lib/utils';
 
 export function LeaveRequestModal() {
     const [open, setOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [isMultiDay, setIsMultiDay] = useState(false);
     const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
     const [reason, setReason] = useState('');
@@ -30,26 +32,30 @@ export function LeaveRequestModal() {
         e.preventDefault();
         setIsLoading(true);
         try {
-            // Generate array of dates between start and end
             const dates: string[] = [];
-            let current = parseISO(startDate);
-            const end = parseISO(endDate);
 
-            if (current > end) {
-                toast.error("End date must be after start date");
-                setIsLoading(false);
-                return;
-            }
+            if (isMultiDay) {
+                let current = parseISO(startDate);
+                const end = parseISO(endDate);
 
-            while (current <= end) {
-                dates.push(format(current, 'yyyy-MM-dd'));
-                current = new Date(current.getTime() + 24 * 60 * 60 * 1000);
+                if (current > end) {
+                    toast.error("End date must be after start date");
+                    setIsLoading(false);
+                    return;
+                }
+
+                while (current <= end) {
+                    dates.push(format(current, 'yyyy-MM-dd'));
+                    current = new Date(current.getTime() + 24 * 60 * 60 * 1000);
+                }
+            } else {
+                dates.push(startDate);
             }
 
             const res = await submitLeaveRequest({ dates, reason, will_work_sunday: willWorkSunday });
             if (res.error) toast.error(res.error);
             else {
-                toast.success(`Leave request submitted for ${dates.length} days`);
+                toast.success(`Leave request submitted for ${dates.length} day${dates.length > 1 ? 's' : ''}`);
                 setOpen(false);
                 setReason('');
                 setWillWorkSunday(false);
@@ -76,10 +82,24 @@ export function LeaveRequestModal() {
                         Request Leave
                     </DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-6 pt-4">
-                    <div className="grid grid-cols-2 gap-4">
+                <form onSubmit={handleSubmit} className="space-y-5 pt-4">
+                    {/* Multi-day Toggle */}
+                    <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-muted/30 border border-border/50">
+                        <div className="space-y-0.5">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-foreground flex items-center gap-2">
+                                Multiple Days
+                                {isMultiDay && <span className="w-1 h-1 rounded-full bg-primary animate-pulse" />}
+                            </label>
+                            <p className="text-[9px] text-muted-foreground font-bold">Select a range of dates</p>
+                        </div>
+                        <Switch checked={isMultiDay} onCheckedChange={setIsMultiDay} />
+                    </div>
+
+                    <div className={cn("grid gap-4", isMultiDay ? "grid-cols-2" : "grid-cols-1")}>
                         <div className="space-y-2">
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Start Date</label>
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                                {isMultiDay ? "Start Date" : "Date of Leave"}
+                            </label>
                             <div className="relative">
                                 <CalendarIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input
@@ -92,20 +112,22 @@ export function LeaveRequestModal() {
                                 />
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">End Date</label>
-                            <div className="relative">
-                                <CalendarIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    type="date"
-                                    className="pl-10"
-                                    value={endDate}
-                                    onChange={(e) => setEndDate(e.target.value)}
-                                    min={startDate}
-                                    required
-                                />
+                        {isMultiDay && (
+                            <div className="space-y-2 animate-in fade-in slide-in-from-left-2 duration-300">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">End Date</label>
+                                <div className="relative">
+                                    <CalendarIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                    <Input
+                                        type="date"
+                                        className="pl-10"
+                                        value={endDate}
+                                        onChange={(e) => setEndDate(e.target.value)}
+                                        min={startDate}
+                                        required
+                                    />
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
                     <div className="space-y-2">
                         <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Reason for Leave</label>
@@ -114,36 +136,37 @@ export function LeaveRequestModal() {
                             value={reason}
                             onChange={(e) => setReason(e.target.value)}
                             required
-                            className="min-h-[100px] resize-none"
+                            className="min-h-[80px] resize-none"
                         />
                     </div>
 
-                    <div className="space-y-4">
-                        <div className={`flex items-center justify-between p-5 rounded-lg border transition-all duration-300 ${willWorkSunday ? 'bg-primary/5 border-primary/20 shadow-sm' : 'bg-muted/30 border-border/50'}`}>
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-foreground flex items-center gap-2">
-                                    Work on upcoming Sunday
-                                    {willWorkSunday && <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />}
-                                </label>
-                                <p className="text-[10px] text-muted-foreground font-semibold leading-relaxed max-w-[200px]">
-                                    Earn credit for this leave by working on the next Sunday.
-                                </p>
+                    {!isMultiDay && (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <div className={`flex items-center justify-between p-4 rounded-xl border transition-all duration-300 ${willWorkSunday ? 'bg-primary/5 border-primary/20 shadow-sm' : 'bg-muted/30 border-border/50'}`}>
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-bold text-foreground flex items-center gap-2">
+                                        Work on upcoming Sunday
+                                    </label>
+                                    <p className="text-[9px] text-muted-foreground font-bold leading-relaxed max-w-[220px]">
+                                        Compensate for this leave by working on next Sunday.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={willWorkSunday}
+                                    onCheckedChange={setWillWorkSunday}
+                                />
                             </div>
-                            <Switch
-                                checked={willWorkSunday}
-                                onCheckedChange={setWillWorkSunday}
-                            />
-                        </div>
 
-                        {willWorkSunday && (
-                            <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 border border-red-100 animate-in fade-in slide-in-from-top-2 duration-300">
-                                <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                                <p className="text-[10px] font-bold text-red-900 leading-relaxed uppercase tracking-tight">
-                                    Warning: If you don't check in on the upcoming Sunday, both the leave date and Sunday will be marked as absent.
-                                </p>
-                            </div>
-                        )}
-                    </div>
+                            {willWorkSunday && (
+                                <div className="flex items-start gap-3 p-3 rounded-xl bg-red-50 border border-red-100 animate-in fade-in duration-300">
+                                    <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                                    <p className="text-[9px] font-black text-red-900 leading-tight uppercase tracking-tight">
+                                        Important: Failing to work on Sunday will count as two absences.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
                     <Button type="submit" className="w-full" disabled={isLoading}>
                         {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                         Submit Request
