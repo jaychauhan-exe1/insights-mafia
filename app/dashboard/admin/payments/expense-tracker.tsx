@@ -17,7 +17,6 @@ interface Props {
 export function ExpenseTracker({ initialExpenses, currentMonth: monthStr }: Props) {
     const [expenses, setExpenses] = useState<MonthlyExpense[]>(initialExpenses);
     const [isFetching, setIsFetching] = useState(false);
-    const [isSyncing, setIsSyncing] = useState(false);
     const [isPending, startTransition] = useTransition();
 
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -51,17 +50,7 @@ export function ExpenseTracker({ initialExpenses, currentMonth: monthStr }: Prop
         }
     }, []);
 
-    const handleSync = async () => {
-        setIsSyncing(true);
-        const res = await syncAutoExpenses(monthStr);
-        if (res.error) {
-            toast.error(res.error);
-        } else {
-            toast.success('Synced with latest data');
-            await fetchMonth(monthStr);
-        }
-        setIsSyncing(false);
-    };
+
 
     const startEdit = (e: MonthlyExpense) => { setEditingId(e.id); setEditLabel(e.category); setEditAmount(String(e.amount)); };
     const cancelEdit = () => { setEditingId(null); setEditLabel(''); setEditAmount(''); };
@@ -111,16 +100,6 @@ export function ExpenseTracker({ initialExpenses, currentMonth: monthStr }: Prop
                         Manage all outflows for {format(displayDate, 'MMMM yyyy')}
                     </p>
                 </div>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 gap-2 text-[10px] font-medium uppercase tracking-wider border-primary/20 text-primary hover:bg-primary/5"
-                    onClick={handleSync}
-                    disabled={isSyncing}
-                >
-                    {isSyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                    Sync Category Totals
-                </Button>
             </div>
 
             <Card className="border border-border/50 shadow-sm rounded-xl overflow-hidden bg-white">

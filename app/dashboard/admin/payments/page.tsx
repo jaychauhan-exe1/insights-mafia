@@ -142,6 +142,16 @@ export default async function AdminPaymentsPage({ searchParams }: Props) {
     const totalFreelancerEarnedMonth = freelancerBalances.reduce((acc, curr) => acc + curr.monthlyEarned, 0);
     const totalEmployeeNet = salaryData.reduce((acc, curr) => acc + curr.finalSalary, 0);
 
+    // Prepare expenses for the "All" tab - automatically inject live totals for current month
+    const manualExpenses = initialExpenses.filter(e => !e.is_auto);
+    const finalExpenses = isCurrentMonth
+        ? [
+            { id: 'auto-1', month: currentYearMonth, category: 'Employee Salaries', amount: totalEmployeeNet, is_auto: true },
+            { id: 'auto-2', month: currentYearMonth, category: 'Freelancer Payouts', amount: totalFreelancerEarnedMonth, is_auto: true },
+            ...manualExpenses
+        ]
+        : initialExpenses;
+
     return (
         <div className="p-4 md:p-8 space-y-8 animate-in fade-in duration-500">
             <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-border/50">
@@ -362,7 +372,7 @@ export default async function AdminPaymentsPage({ searchParams }: Props) {
 
                         <TabsContent value="all" className="outline-none">
                             <ExpenseTracker
-                                initialExpenses={initialExpenses as any}
+                                initialExpenses={finalExpenses as any}
                                 currentMonth={currentYearMonth}
                             />
                         </TabsContent>

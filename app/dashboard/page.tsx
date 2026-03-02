@@ -63,6 +63,8 @@ export default async function DashboardPage() {
         firstAttendancesRes,
         approvalItemsRes,
         upcomingLeavesRes,
+        customExpensesRes,
+        freelancerCreditsRes,
     ] = await Promise.all([
         supabase
             .from("tasks")
@@ -200,6 +202,22 @@ export default async function DashboardPage() {
                 .in("status", ["Approved", "Rejected"])
                 .order("date", { ascending: true })
             : Promise.resolve({ data: [] }),
+
+        profile.role === "Admin"
+            ? supabase
+                .from("monthly_expenses")
+                .select("*")
+                .eq("month", todayStr.slice(0, 7))
+            : Promise.resolve({ data: [] }),
+
+        profile.role === "Admin"
+            ? supabase
+                .from("wallet_transactions")
+                .select("amount")
+                .eq("type", "credit")
+                .gte("created_at", `${todayStr.slice(0, 7)}-01T00:00:00Z`)
+                .lte("created_at", `${todayStr.slice(0, 7)}-31T23:59:59Z`)
+            : Promise.resolve({ data: [] }),
     ]);
 
     const newTasksCount = tasksRes?.count || 0;
@@ -268,15 +286,21 @@ export default async function DashboardPage() {
                 empAttendance,
                 [],
                 joiningDate,
+                todayStr.slice(0, 7)
             );
             return acc + calc.finalSalary;
         }, 0);
 
-        const freelancerPayouts = freelancers.reduce(
-            (acc: number, f: any) => acc + Number(f.wallet_balance || 0),
+        const freelancerPayouts = ((freelancerCreditsRes as any)?.data || []).reduce(
+            (acc: number, t: any) => acc + Number(t.amount || 0),
             0,
         );
-        const totalPayouts = employeesSalary + freelancerPayouts;
+
+        const customExpenses = ((customExpensesRes as any)?.data || [])
+            .filter((e: any) => !e.is_auto) // Only count manual ones as auto-rows are calculated above
+            .reduce((acc: number, e: any) => acc + Number(e.amount || 0), 0);
+
+        const totalPayouts = employeesSalary + freelancerPayouts + customExpenses;
 
         statsList = [
             {
@@ -504,8 +528,8 @@ export default async function DashboardPage() {
                                 </div>
                                 <span
                                     className={`text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-widest whitespace-nowrap shrink-0 ${isApproved
-                                            ? "bg-primary/10 text-primary"
-                                            : "bg-orange-50 text-orange-600 border border-orange-200"
+                                        ? "bg-primary/10 text-primary"
+                                        : "bg-orange-50 text-orange-600 border border-orange-200"
                                         }`}
                                 >
                                     {isApproved ? "Approved Leave" : "Rejected"}
