@@ -19,6 +19,7 @@ import {
     getISTHours,
 } from "@/lib/date-utils";
 import { calculateSalary } from "@/lib/salary-utils";
+import { autoFixMissingCheckouts } from "./actions";
 
 export default async function AttendancePage({
     searchParams,
@@ -30,6 +31,9 @@ export default async function AttendancePage({
     const supabase = await createAdminClient();
 
     if (!profile || profile.role !== "Employee") return null;
+
+    // 1. Auto-fix any missing checkouts before loading data
+    await autoFixMissingCheckouts(profile.id);
 
     const page = parseInt(pageParam || "1");
     const pageSize = 10;
@@ -86,6 +90,10 @@ export default async function AttendancePage({
     const history =
         historyRawData.map((entry) => {
             let status = entry.status || "Present";
+
+            // Highlight "Checkout Miss" logic (midnight checkout with Absent status)
+            const isCheckoutMiss = status === "Absent" && entry.check_out && entry.check_out.includes("23:59:59");
+
             if (
                 status === "Present" &&
                 !entry.check_out &&
@@ -98,10 +106,13 @@ export default async function AttendancePage({
             const monthKey = entry.date.substring(0, 7);
             const isHalfDayCovered = status === "Half Day" && monthSummaries[monthKey]?.halfDaysConverted;
 
-            return { ...entry, status, isHalfDayCovered };
+            return { ...entry, status, isHalfDayCovered, isCheckoutMiss };
         }) || [];
 
     const totalPages = Math.ceil((count || 0) / pageSize);
+
+    // Identify if there's a recent checkout miss to show a notice
+    const recentCheckoutMiss = history.find(h => h.isCheckoutMiss);
 
     const { data: firstAttendance } = await supabase
         .from("attendance")
@@ -175,6 +186,21 @@ export default async function AttendancePage({
                 </Card>
             )}
 
+            {recentCheckoutMiss && (
+                <Card className="border-none bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-center gap-4 animate-in slide-in-from-top duration-500">
+                    <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center text-red-600 shrink-0">
+                        <AlertCircle className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <p className="text-sm font-bold text-red-700">Checkout Missed</p>
+                        <p className="text-[11px] text-red-600/80 font-medium">
+                            You forgot to checkout on <strong>{formatIST(recentCheckoutMiss.date)}</strong>.
+                            The system has marked you as <strong>Absent</strong> for that day.
+                        </p>
+                    </div>
+                </Card>
+            )}
+
             <div className="grid lg:grid-cols-3 gap-6">
                 {/* Left: Check-in/out Controls */}
                 <div className="lg:col-span-1 space-y-6">
@@ -209,7 +235,7 @@ export default async function AttendancePage({
                                         isDisabled={isBeforeWorkingHours}
                                     />
                                     <p className="text-white/40 text-[9px] font-extrabold uppercase tracking-[0.2em]">
-                                        TAP TO CLOCK IN
+                                        TAP TO CHECK IN
                                     </p>
                                 </div>
                             ) : !todayAttendance.check_out ? (
@@ -356,14 +382,15 @@ export default async function AttendancePage({
                                                             </div>
                                                         </div>
                                                         <Badge
-                                                            className={`border-none text-[8px] font-bold h-4 px-1.5 uppercase ${entry.isHalfDayCovered ? "bg-blue-50 text-blue-600 border border-blue-100" :
-                                                                entry.status === "Present" ? "bg-emerald-50 text-emerald-500" :
-                                                                    entry.status === "Absent" ? "bg-red-50 text-red-500" :
-                                                                        entry.status === "Paid Off" ? "bg-blue-50 text-blue-600" :
-                                                                            entry.status === "Holiday" ? "bg-purple-50 text-purple-500" :
-                                                                                "bg-muted text-muted-foreground/50"}`}
+                                                            className={`border-none text-[8px] font-bold h-4 px-1.5 uppercase ${entry.isCheckoutMiss ? "bg-red-100 text-red-700 border border-red-200" :
+                                                                    entry.isHalfDayCovered ? "bg-blue-50 text-blue-600 border border-blue-100" :
+                                                                        entry.status === "Present" ? "bg-emerald-50 text-emerald-500" :
+                                                                            entry.status === "Absent" ? "bg-red-50 text-red-500" :
+                                                                                entry.status === "Paid Off" ? "bg-blue-50 text-blue-600" :
+                                                                                    entry.status === "Holiday" ? "bg-purple-50 text-purple-500" :
+                                                                                        "bg-muted text-muted-foreground/50"}`}
                                                         >
-                                                            {entry.isHalfDayCovered ? "Half Day Covered" : (entry.holiday_label || entry.status || "Present")}
+                                                            {entry.isCheckoutMiss ? "Checkout Miss" : entry.isHalfDayCovered ? "Half Day Covered" : (entry.holiday_label || entry.status || "Present")}
                                                         </Badge>
                                                     </div>
                                                 </TableCell>

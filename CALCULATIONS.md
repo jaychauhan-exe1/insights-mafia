@@ -43,7 +43,7 @@ At the end of each month (or at any point during the month), the system:
 | ----------------------------- | ------------ |
 | Present (full day)            | 0 absences   |
 | Approved Paid Leave           | 0 absences   |
-| Half Day (worked < 4 hours)   | 0.5 absences |
+| Half Day (worked < 7.8 hours) | 0.5 absences |
 | Absent (did not show up)      | 1.0 absence  |
 | Unpaid Leave / Day Off        | 1.0 absence  |
 | No record at all for that day | 1.0 absence  |
@@ -64,22 +64,24 @@ If an employee joined mid-month, the system only counts days from their **first 
 
 Each working day for an employee gets one of the following statuses:
 
-| Status       | Meaning                      | Effect on Salary                          |
-| ------------ | ---------------------------- | ----------------------------------------- |
-| **Present**  | Worked a full day (4+ hours) | No deduction                              |
-| **Half Day** | Worked less than 4 hours     | Half the normal deduction                 |
-| **Absent**   | Did not check in at all      | Full day deduction                        |
-| **Paid Off** | Used an approved paid leave  | No deduction (leave balance reduced by 1) |
-| **Off**      | Taken an unpaid day off      | Full day deduction                        |
+| Status       | Meaning                                     | Effect on Salary                          |
+| ------------ | ------------------------------------------- | ----------------------------------------- |
+| **Present**  | Worked a full day (checkout after 05:50 PM) | No deduction                              |
+| **Half Day** | Worked 2.5 – 4.5 hours (early checkout)     | Half the normal deduction                 |
+| **Absent**   | Did not check in at all                     | Full day deduction                        |
+| **Paid Off** | Used an approved paid leave                 | No deduction (leave balance reduced by 1) |
+| **Off**      | Taken an unpaid day off                     | Full day deduction                        |
 
 ---
 
 ## 3. Half-Day Rule
 
-When an employee checks out, the system automatically calculates **how many hours they worked** that day.
+When an employee tries to check out, the system checks **how many hours they have worked** and **what time it is**:
 
-- If the total time worked is **less than 4 hours** → the day is marked as a **Half Day**.
-- If the total time worked is **4 hours or more** → the day is marked as **Present**.
+- **Less than 2.5 hours** → Checkout is **blocked**. The employee must work at least 2.5 hours before they can leave.
+- **2.5 to 4.5 hours** → Checkout is **allowed** and the day is marked as a **Half Day**.
+- **More than 4.5 hours but before 05:50 PM** → Checkout is **blocked**. The employee has passed the half-day window and must now complete the full working day (checkout after 05:50 PM).
+- **After 05:50 PM (with 10-min flexibility)** → Checkout is **always allowed** and the day is marked as **Present** (full day).
 
 This happens automatically upon check-out — no manual input is needed.
 
@@ -87,10 +89,11 @@ This happens automatically upon check-out — no manual input is needed.
 
 ## 4. Auto-Marking Absences
 
-To ensure attendance records are always complete, the system runs an automatic check at the end of each working day (after 6:00 PM IST):
+To ensure attendance records are always complete, the system runs an automatic check whenever a dashboard is opened or a new check-in is attempted:
 
-- Any employee who **did not check in** at all that day is automatically recorded as **Absent**.
-- Any employee who **checked in but forgot to check out** is automatically checked out at 6:00 PM, and their total hours are calculated accordingly (may result in a Half Day or Present depending on duration).
+- **Missing Check-ins**: Any employee who did not check in at all for a past working day is automatically recorded as **Absent**.
+- **Forgotten Check-outs**: Any employee who checked in but forgot to check out by **midnight** is automatically marked as **Absent** for that day, regardless of their work duration.
+- **Reporting**: These forgotten checkouts will be highlighted on the dashboard with a **"Checkout Miss"** notice to alert the employee and the admin.
 
 This prevents gaps in attendance records and ensures the salary calculation always has accurate data.
 

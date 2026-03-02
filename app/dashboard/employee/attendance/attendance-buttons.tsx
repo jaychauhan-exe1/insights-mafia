@@ -156,7 +156,7 @@ export function AttendanceButtons({ isCheckedIn, clients, isDisabled = false }: 
                                 {isLoading ? <Loader2 className="w-8 h-8 animate-spin" /> : <LogOut className="w-8 h-8" />}
                             </div>
                         </Button>
-                        <span className="text-[10px] font-extrabold text-white uppercase tracking-widest animate-pulse">Clock Out</span>
+                        <span className="text-[10px] font-extrabold text-white uppercase tracking-widest animate-pulse">Check Out</span>
                     </div>
                 ) : (
                     <div className="flex flex-col items-center gap-3">
@@ -171,7 +171,7 @@ export function AttendanceButtons({ isCheckedIn, clients, isDisabled = false }: 
                             </div>
                         </Button>
                         <span className="text-[10px] font-extrabold text-white uppercase tracking-widest">
-                            {isDisabled ? "Check-in starts at 10:00 AM" : "Clock In"}
+                            {isDisabled ? "Check-in starts at 10:00 AM" : "Check in"}
                         </span>
                     </div>
                 )}

@@ -12,10 +12,11 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { AdminAttendanceCalendar } from "./admin-attendance-calendar";
-import { Clock, History, Users, MapPin } from "lucide-react";
+import { Clock, History, Users, MapPin, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { formatIST, getISTToday, formatISTTime } from "@/lib/date-utils";
+import { autoFixMissingCheckouts } from "../../employee/attendance/actions";
 
 export default async function AdminAttendancePage({
     searchParams,
@@ -27,6 +28,9 @@ export default async function AdminAttendancePage({
     const supabase = await createAdminClient();
 
     if (!profile || profile.role !== "Admin") return null;
+
+    // 1. Auto-fix any missing checkouts for all users before loading data
+    await autoFixMissingCheckouts();
 
     const page = parseInt(pageParam || "1");
     const pageSize = 10;
@@ -97,15 +101,22 @@ export default async function AdminAttendancePage({
 
     const history =
         paginatedHistory?.map((entry) => {
+            let status = entry.status || "Present";
+
+            // Highlight Checkout Miss (midnight checkout with Absent status)
+            const isCheckoutMiss = status === "Absent" && entry.check_out && entry.check_out.includes("23:59:59");
+
             if (
-                entry.status === "Present" &&
+                status === "Present" &&
                 !entry.check_out &&
                 isAfterCheckoutWindow(entry.date)
             ) {
-                return { ...entry, status: "Absent" };
+                status = "Absent";
             }
-            return entry;
+            return { ...entry, status, isCheckoutMiss };
         }) || [];
+
+    const recentCheckoutMisses = history.filter(h => h.isCheckoutMiss);
 
     return (
         <div className="space-y-6 mx-auto pb-20 lg:pb-0">
@@ -119,6 +130,22 @@ export default async function AdminAttendancePage({
                     </p>
                 </div>
             </header>
+
+            {recentCheckoutMisses.length > 0 && (
+                <Card className="border-none bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex items-center gap-4 animate-in slide-in-from-top duration-500">
+                    <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center text-red-600 shrink-0">
+                        <AlertCircle className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <p className="text-sm font-bold text-red-700">System Alert: Checkout Misses Detected</p>
+                        <p className="text-[11px] text-red-600/80 font-medium">
+                            The following employees forgot to checkout recently:
+                            <strong> {Array.from(new Set(recentCheckoutMisses.map(m => m.user?.name))).join(', ')}</strong>.
+                            These sessions have been auto-closed and marked as <strong>Absent</strong>.
+                        </p>
+                    </div>
+                </Card>
+            )}
 
             {/* Stats Overview */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -336,9 +363,12 @@ export default async function AdminAttendancePage({
                                             </TableCell>
                                             <TableCell>
                                                 <Badge
-                                                    className={`border-none text-[8px] font-bold h-5 px-2 uppercase shadow-none ${entry.status === "Present" ? "bg-emerald-500/10 text-emerald-600" : entry.status === "Absent" ? "bg-red-500/10 text-red-600" : "bg-blue-500/10 text-blue-600"}`}
+                                                    className={`border-none text-[8px] font-bold h-5 px-2 uppercase shadow-none ${entry.isCheckoutMiss ? "bg-red-100 text-red-700 border border-red-200" :
+                                                        entry.status === "Present" ? "bg-emerald-500/10 text-emerald-600" :
+                                                            entry.status === "Absent" ? "bg-red-500/10 text-red-600" :
+                                                                "bg-blue-500/10 text-blue-600"}`}
                                                 >
-                                                    {entry.status}
+                                                    {entry.isCheckoutMiss ? "Checkout Miss" : entry.status}
                                                 </Badge>
                                             </TableCell>
                                             <TableCell>
@@ -455,9 +485,12 @@ export default async function AdminAttendancePage({
                                         </div>
                                     </div>
                                     <Badge
-                                        className={`border-none text-[8px] font-bold h-5 px-2 uppercase shadow-none ${entry.status === "Present" ? "bg-emerald-500/10 text-emerald-600" : entry.status === "Absent" ? "bg-red-500/10 text-red-600" : "bg-blue-500/10 text-blue-600"}`}
+                                        className={`border-none text-[8px] font-bold h-5 px-2 uppercase shadow-none ${entry.isCheckoutMiss ? "bg-red-100 text-red-700 border border-red-200" :
+                                            entry.status === "Present" ? "bg-emerald-500/10 text-emerald-600" :
+                                                entry.status === "Absent" ? "bg-red-500/10 text-red-600" :
+                                                    "bg-blue-500/10 text-blue-600"}`}
                                     >
-                                        {entry.status}
+                                        {entry.isCheckoutMiss ? "Checkout Miss" : entry.status}
                                     </Badge>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4 py-4 border-y border-border/50">
